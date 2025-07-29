@@ -1,0 +1,35 @@
+<svg width="192" height="192" viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2196F3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#21CBF3;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 배경 -->
+  <rect width="192" height="192" fill="url(#bg)" rx="48"/>
+  
+  <!-- 동전 스택 -->
+  <circle cx="96" cy="80" r="25" fill="#FFD700" stroke="#FFA000" stroke-width="3"/>
+  <circle cx="96" cy="75" r="25" fill="#FFD700" stroke="#FFA000" stroke-width="3"/>
+  <circle cx="96" cy="70" r="25" fill="#FFEB3B" stroke="#FFA000" stroke-width="3"/>
+  
+  <!-- 달러 기호 -->
+  <text x="96" y="77" text-anchor="middle" font-family="Arial Black" font-size="28" fill="#2E7D32" font-weight="bold">₩</text>
+  
+  <!-- 지폐 -->
+  <rect x="65" y="100" width="62" height="35" fill="#4CAF50" stroke="#2E7D32" stroke-width="2" rx="5"/>
+  <rect x="68" y="103" width="56" height="29" fill="#66BB6A" rx="3"/>
+  <circle cx="85" cy="117" r="8" fill="#2E7D32" opacity="0.5"/>
+  <text x="105" y="120" font-family="Arial" font-size="10" fill="#1B5E20" font-weight="bold">₩</text>
+  
+  <!-- 계산기 아이콘 -->
+  <rect x="130" y="105" width="25" height="30" fill="#37474F" rx="3"/>
+  <rect x="132" y="107" width="21" height="8" fill="#263238" rx="1"/>
+  <circle cx="136" cy="120" r="2" fill="#78909C"/>
+  <circle cx="142" cy="120" r="2" fill="#78909C"/>
+  <circle cx="148" cy="120" r="2" fill="#78909C"/>
+  <circle cx="136" cy="127" r="2" fill="#78909C"/>
+  <circle cx="142" cy="127" r="2" fill="#78909C"/>
+  <circle cx="148" cy="127" r="2" fill="#78909C"/>
+</svg>

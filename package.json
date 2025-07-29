@@ -1,0 +1,59 @@
+{
+  "name": "hybrid-budget-app-pro",
+  "version": "1.0.0",
+  "description": "NoSQL DB 기반 하이브리드 가계부 앱 - 모바일과 데스크톱 모두 지원하는 PWA",
+  "main": "index.html",
+  "type": "module",
+  "scripts": {
+    "start": "npm run serve",
+    "serve": "python -m http.server 8000 || npx http-server -p 8000",
+    "dev": "npm run serve",
+    "build": "echo 'No build step required for vanilla JS project'",
+    "test": "echo 'Tests coming soon...'",
+    "lint": "echo 'Linting coming soon...'",
+    "deploy": "echo 'Ready for deployment - all files are static'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR_USERNAME/hybrid-budget-app.git"
+  },
+  "keywords": [
+    "budget",
+    "finance",
+    "pwa",
+    "indexeddb",
+    "nosql",
+    "hybrid",
+    "mobile",
+    "desktop",
+    "javascript",
+    "personal-finance",
+    "expense-tracker",
+    "asset-management"
+  ],
+  "author": "형님",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/YOUR_USERNAME/hybrid-budget-app/issues"
+  },
+  "homepage": "https://github.com/YOUR_USERNAME/hybrid-budget-app#readme",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie <= 11"
+  ],
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {},
+  "pwa": {
+    "name": "하이브리드 가계부 Pro",
+    "short_name": "가계부Pro",
+    "description": "개인 맞춤형 재정 관리 솔루션"
+  }
+}

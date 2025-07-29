@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196F3">
+    <meta name="description" content="하이브리드 가계부 앱 - NoSQL DB 기반 개인 재정 관리">
+    
+    <!-- PWA 매니페스트 -->
+    <link rel="manifest" href="./public/manifest.json">
+    
+    <!-- 모바일 최적화 -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="가계부">
+    
+    <!-- 아이콘 -->
+    <link rel="icon" type="image/png" sizes="192x192" href="./public/icon-192x192.png">
+    <link rel="apple-touch-icon" href="./public/icon-192x192.png">
+    
+    <title>하이브리드 가계부 Pro</title>
+    <link rel="stylesheet" href="./src/styles/main.css">
+    <link rel="stylesheet" href="./src/styles/advanced.css">
+</head>
+<body>
+    <div id="app">
+        <div class="loading-screen">
+            <div class="loading-spinner"></div>
+            <h2>가계부 로딩중...</h2>
+            <p>데이터베이스를 초기화하고 있습니다.</p>
+        </div>
+    </div>
+
+    <!-- 앱 네비게이션 (로그인 후 표시) -->
+    <nav id="app-nav" class="app-navigation" style="display: none;">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="nav-logo">💰</span>
+                <span class="nav-title">가계부 Pro</span>
+            </div>
+            
+            <div class="nav-menu">
+                <button data-nav="dashboard" class="nav-item active">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-label">대시보드</span>
+                </button>
+                
+                <button data-nav="transactions" class="nav-item">
+                    <span class="nav-icon">💳</span>
+                    <span class="nav-label">거래내역</span>
+                </button>
+                
+                <button data-nav="assets" class="nav-item">
+                    <span class="nav-icon">🏦</span>
+                    <span class="nav-label">자산관리</span>
+                </button>
+                
+                <button data-nav="reports" class="nav-item">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">리포트</span>
+                </button>
+                
+                <button data-nav="settings" class="nav-item">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">설정</span>
+                </button>
+            </div>
+            
+            <div class="nav-actions">
+                <button id="install-btn" class="install-btn" style="display: none;">
+                    <span class="nav-icon">📱</span>
+                    앱 설치
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 메인 컨텐츠 영역 -->
+    <main id="main-content" class="main-content" style="display: none;">
+        <!-- 동적 컨텐츠가 여기에 로드됩니다 -->
+    </main>
+
+    <!-- 스크립트 로드 -->
+    <script src="./src/database.js"></script>
+    <script src="./src/app.js"></script>
+    
+    <script>
+        // 서비스 워커 등록
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('SW registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('SW registration failed:', error);
+                    });
+            });
+        }
+
+        // 로딩 완료 후 UI 표시
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.querySelector('.loading-screen').style.display = 'none';
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

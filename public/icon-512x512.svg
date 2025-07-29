@@ -1,0 +1,48 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2196F3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#21CBF3;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 배경 -->
+  <rect width="512" height="512" fill="url(#bg512)" rx="128"/>
+  
+  <!-- 큰 동전 스택 -->
+  <circle cx="256" cy="200" r="65" fill="#FFD700" stroke="#FFA000" stroke-width="8"/>
+  <circle cx="256" cy="190" r="65" fill="#FFD700" stroke="#FFA000" stroke-width="8"/>
+  <circle cx="256" cy="180" r="65" fill="#FFEB3B" stroke="#FFA000" stroke-width="8"/>
+  
+  <!-- 원화 기호 -->
+  <text x="256" y="195" text-anchor="middle" font-family="Arial Black" font-size="75" fill="#2E7D32" font-weight="bold">₩</text>
+  
+  <!-- 큰 지폐 -->
+  <rect x="170" y="260" width="165" height="90" fill="#4CAF50" stroke="#2E7D32" stroke-width="5" rx="12"/>
+  <rect x="180" y="270" width="145" height="70" fill="#66BB6A" rx="8"/>
+  <circle cx="220" cy="305" r="20" fill="#2E7D32" opacity="0.5"/>
+  <text x="280" y="315" font-family="Arial" font-size="25" fill="#1B5E20" font-weight="bold">₩</text>
+  
+  <!-- 계산기 아이콘 -->
+  <rect x="340" y="280" width="65" height="80" fill="#37474F" rx="8"/>
+  <rect x="348" y="288" width="49" height="20" fill="#263238" rx="3"/>
+  
+  <!-- 계산기 버튼들 -->
+  <circle cx="360" cy="325" r="5" fill="#78909C"/>
+  <circle cx="375" cy="325" r="5" fill="#78909C"/>
+  <circle cx="390" cy="325" r="5" fill="#78909C"/>
+  <circle cx="360" cy="340" r="5" fill="#78909C"/>
+  <circle cx="375" cy="340" r="5" fill="#78909C"/>
+  <circle cx="390" cy="340" r="5" fill="#78909C"/>
+  <circle cx="360" cy="355" r="5" fill="#4CAF50"/>
+  <circle cx="375" cy="355" r="5" fill="#78909C"/>
+  <circle cx="390" cy="355" r="5" fill="#f44336"/>
+  
+  <!-- 그래프 아이콘 -->
+  <rect x="140" y="380" width="80" height="60" fill="#37474F" rx="5"/>
+  <polyline points="150,425 165,410 180,420 195,400 210,415" stroke="#4CAF50" stroke-width="4" fill="none"/>
+  <rect x="150" y="430" width="8" height="8" fill="#2196F3"/>
+  <rect x="165" y="425" width="8" height="13" fill="#2196F3"/>
+  <rect x="180" y="420" width="8" height="18" fill="#2196F3"/>
+  <rect x="195" y="415" width="8" height="23" fill="#2196F3"/>
+</svg>
