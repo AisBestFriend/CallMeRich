@@ -2,7 +2,7 @@
 class DatabaseManager {
     constructor() {
         this.dbName = 'BudgetAppDB';
-        this.dbVersion = 1;
+        this.dbVersion = 2;
         this.db = null;
         this.currentUserId = localStorage.getItem('currentUserId') || null;
     }
@@ -59,6 +59,13 @@ class DatabaseManager {
                     const accountStore = db.createObjectStore('accounts', { keyPath: 'id' });
                     accountStore.createIndex('userId', 'userId', { unique: false });
                     accountStore.createIndex('type', 'type', { unique: false });
+                }
+
+                // 가계부 사용자 테이블
+                if (!db.objectStoreNames.contains('account_users')) {
+                    const accountUsersStore = db.createObjectStore('account_users', { keyPath: 'id' });
+                    accountUsersStore.createIndex('ownerId', 'ownerId', { unique: false });
+                    accountUsersStore.createIndex('name', 'name', { unique: false });
                 }
             };
         });
@@ -225,6 +232,7 @@ class DatabaseManager {
         const txn = {
             id: this.generateId(),
             userId: this.currentUserId,
+            accountUserId: transactionData.accountUserId || null, // 가계부 사용자 ID
             date: transactionData.date || new Date().toISOString().split('T')[0],
             amount: parseFloat(transactionData.amount),
             currency: transactionData.currency || 'KRW',
@@ -277,6 +285,11 @@ class DatabaseManager {
             const request = index.getAll(userId);
             request.onsuccess = () => {
                 let results = request.result;
+                
+                // 가계부 사용자별 필터링
+                if (filters.accountUserId) {
+                    results = results.filter(t => t.accountUserId === filters.accountUserId);
+                }
                 
                 // 필터 적용
                 if (filters.dateFrom) {
@@ -361,6 +374,7 @@ class DatabaseManager {
         const asset = {
             id: this.generateId(),
             userId: this.currentUserId,
+            accountUserId: assetData.accountUserId || null, // 가계부 사용자 ID
             name: assetData.name,
             type: assetData.type, // 'securities', 'real_estate', 'cash', 'crypto', 'commodity', 'other'
             subType: assetData.subType, // 'stock', 'bond', 'fund', 'apartment', 'land', etc.
@@ -386,7 +400,7 @@ class DatabaseManager {
         });
     }
 
-    async getAssets(userId = null, type = null) {
+    async getAssets(userId = null, filters = {}) {
         userId = userId || this.currentUserId;
         const transaction = this.db.transaction(['assets'], 'readonly');
         const store = transaction.objectStore('assets');
@@ -397,8 +411,14 @@ class DatabaseManager {
             request.onsuccess = () => {
                 let results = request.result.filter(asset => asset.isActive);
                 
-                if (type) {
-                    results = results.filter(asset => asset.type === type);
+                // 가계부 사용자별 필터링
+                if (filters.accountUserId) {
+                    results = results.filter(asset => asset.accountUserId === filters.accountUserId);
+                }
+                
+                // 자산 유형별 필터링
+                if (filters.type) {
+                    results = results.filter(asset => asset.type === filters.type);
                 }
                 
                 // 가치 순으로 정렬
@@ -721,9 +741,511 @@ class DatabaseManager {
         };
     }
 
-    async importUserData(data) {
-        // 데이터 유효성 검사 후 가져오기 로직
-        // 구현 필요
+    async importUserData(data, options = {}) {
+        const { 
+            overwrite = false, 
+            importMode = 'add', // 'add', 'replace'
+            mergeStrategy = 'skip', // 'skip', 'overwrite', 'merge'
+            includeAssets = true,
+            includeTransactions = true,
+            includeAccounts = true
+        } = options;
+
+        try {
+            // 데이터 유효성 검사
+            if (!data || !data.version || !data.user) {
+                throw new Error('잘못된 데이터 형식입니다.');
+            }
+
+            // 버전 호환성 확인
+            if (data.version !== '1.0') {
+                console.warn(`지원하지 않는 데이터 버전: ${data.version}`);
+            }
+
+            const userId = this.currentUserId;
+            const importResults = {
+                success: false,
+                imported: {
+                    transactions: 0,
+                    assets: 0,
+                    accounts: 0
+                },
+                skipped: {
+                    transactions: 0,
+                    assets: 0,
+                    accounts: 0
+                },
+                deleted: {
+                    transactions: 0,
+                    assets: 0,
+                    accounts: 0
+                },
+                errors: []
+            };
+
+            // 완전히 바꾸기 모드일 때 기존 데이터 삭제
+            if (importMode === 'replace') {
+                try {
+                    if (includeTransactions) {
+                        const existingTransactions = await this.getTransactions(userId);
+                        for (const transaction of existingTransactions) {
+                            await this.deleteTransaction(transaction.id);
+                            importResults.deleted.transactions++;
+                        }
+                    }
+                    
+                    if (includeAssets) {
+                        const existingAssets = await this.getAssets(userId);
+                        for (const asset of existingAssets) {
+                            await this.deleteAsset(asset.id);
+                            importResults.deleted.assets++;
+                        }
+                    }
+                    
+                    if (includeAccounts) {
+                        const existingAccounts = await this.getAccounts(userId);
+                        for (const account of existingAccounts) {
+                            await this.deleteAccount(account.id);
+                            importResults.deleted.accounts++;
+                        }
+                    }
+                } catch (error) {
+                    importResults.errors.push(`기존 데이터 삭제 실패: ${error.message}`);
+                }
+            }
+
+            // 사용자 정보 업데이트 (설정만)
+            if (data.user && data.user.settings) {
+                try {
+                    await this.updateUser(userId, {
+                        settings: { ...data.user.settings }
+                    });
+                } catch (error) {
+                    importResults.errors.push(`사용자 설정 업데이트 실패: ${error.message}`);
+                }
+            }
+
+            // 계정 가져오기
+            if (includeAccounts && data.accounts && data.accounts.length > 0) {
+                const existingAccounts = await this.getAccounts(userId);
+                const existingAccountNames = existingAccounts.map(a => a.name);
+
+                for (const accountData of data.accounts) {
+                    try {
+                        // 완전히 바꾸기 모드가 아닐 때만 중복 체크
+                        const accountExists = importMode === 'add' ? existingAccountNames.includes(accountData.name) : false;
+                        
+                        if (accountExists && mergeStrategy === 'skip') {
+                            importResults.skipped.accounts++;
+                            continue;
+                        }
+
+                        const newAccount = {
+                            ...accountData,
+                            id: this.generateId(), // 새 ID 생성
+                            userId: userId, // 현재 사용자로 변경
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        };
+
+                        if (accountExists && mergeStrategy === 'overwrite') {
+                            const existingAccount = existingAccounts.find(a => a.name === accountData.name);
+                            const updateData = {
+                                ...accountData,
+                                userId: userId,
+                                updatedAt: new Date().toISOString()
+                            };
+                            await this.updateAccount(existingAccount.id, updateData);
+                        } else if (!accountExists) {
+                            await this.createAccount(newAccount);
+                        }
+                        
+                        importResults.imported.accounts++;
+                    } catch (error) {
+                        importResults.errors.push(`계정 "${accountData.name}" 가져오기 실패: ${error.message}`);
+                        importResults.skipped.accounts++;
+                    }
+                }
+            }
+
+            // 자산 가져오기
+            if (includeAssets && data.assets && data.assets.length > 0) {
+                const existingAssets = await this.getAssets(userId);
+                const existingAssetNames = existingAssets.map(a => a.name);
+
+                for (const assetData of data.assets) {
+                    try {
+                        // 완전히 바꾸기 모드가 아닐 때만 중복 체크
+                        const assetExists = importMode === 'add' ? existingAssetNames.includes(assetData.name) : false;
+                        
+                        if (assetExists && mergeStrategy === 'skip') {
+                            importResults.skipped.assets++;
+                            continue;
+                        }
+
+                        const newAsset = {
+                            ...assetData,
+                            id: this.generateId(), // 새 ID 생성
+                            userId: userId, // 현재 사용자로 변경
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        };
+
+                        if (assetExists && mergeStrategy === 'overwrite') {
+                            const existingAsset = existingAssets.find(a => a.name === assetData.name);
+                            const updateData = {
+                                ...assetData,
+                                userId: userId,
+                                updatedAt: new Date().toISOString()
+                            };
+                            await this.updateAsset(existingAsset.id, updateData);
+                        } else if (!assetExists) {
+                            await this.createAsset(newAsset);
+                        }
+                        
+                        importResults.imported.assets++;
+                    } catch (error) {
+                        importResults.errors.push(`자산 "${assetData.name}" 가져오기 실패: ${error.message}`);
+                        importResults.skipped.assets++;
+                    }
+                }
+            }
+
+            // 거래 내역 가져오기
+            if (includeTransactions && data.transactions && data.transactions.length > 0) {
+                const existingTransactions = await this.getTransactions(userId);
+                
+                for (const transactionData of data.transactions) {
+                    try {
+                        // 완전히 바꾸기 모드가 아닐 때만 중복 체크
+                        const transactionExists = importMode === 'add' ? existingTransactions.some(existing => 
+                            existing.date === transactionData.date &&
+                            Math.abs(existing.amount) === Math.abs(transactionData.amount) &&
+                            existing.description === transactionData.description &&
+                            existing.type === transactionData.type
+                        ) : false;
+                        
+                        if (transactionExists && mergeStrategy === 'skip') {
+                            importResults.skipped.transactions++;
+                            continue;
+                        }
+
+                        const newTransaction = {
+                            ...transactionData,
+                            id: this.generateId(), // 새 ID 생성
+                            userId: userId, // 현재 사용자로 변경
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        };
+
+                        if (transactionExists && mergeStrategy === 'overwrite') {
+                            const existingTransaction = existingTransactions.find(existing => 
+                                existing.date === transactionData.date &&
+                                Math.abs(existing.amount) === Math.abs(transactionData.amount) &&
+                                existing.description === transactionData.description &&
+                                existing.type === transactionData.type
+                            );
+                            const updateData = {
+                                ...transactionData,
+                                userId: userId,
+                                updatedAt: new Date().toISOString()
+                            };
+                            await this.updateTransaction(existingTransaction.id, updateData);
+                        } else if (!transactionExists) {
+                            await this.createTransaction(newTransaction);
+                        }
+
+                        importResults.imported.transactions++;
+                    } catch (error) {
+                        importResults.errors.push(`거래 내역 가져오기 실패: ${error.message}`);
+                        importResults.skipped.transactions++;
+                    }
+                }
+            }
+
+            importResults.success = true;
+            return importResults;
+
+        } catch (error) {
+            console.error('데이터 가져오기 실패:', error);
+            throw new Error(`데이터 가져오기 실패: ${error.message}`);
+        }
+    }
+
+    // JSON 파일로 데이터 내보내기
+    async downloadBackup(filename = null) {
+        try {
+            const data = await this.exportUserData();
+            const jsonString = JSON.stringify(data, null, 2);
+            
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || `budget_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            URL.revokeObjectURL(url);
+            return true;
+        } catch (error) {
+            console.error('백업 다운로드 실패:', error);
+            throw new Error(`백업 다운로드 실패: ${error.message}`);
+        }
+    }
+
+    // 파일에서 데이터 가져오기
+    async uploadBackup(file, options = {}) {
+        return new Promise((resolve, reject) => {
+            if (!file) {
+                reject(new Error('파일이 선택되지 않았습니다.'));
+                return;
+            }
+
+            if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+                reject(new Error('JSON 파일만 지원됩니다.'));
+                return;
+            }
+
+            const reader = new FileReader();
+            
+            reader.onload = async (event) => {
+                try {
+                    const jsonData = JSON.parse(event.target.result);
+                    const result = await this.importUserData(jsonData, options);
+                    resolve(result);
+                } catch (error) {
+                    reject(new Error(`파일 처리 실패: ${error.message}`));
+                }
+            };
+
+            reader.onerror = () => {
+                reject(new Error('파일 읽기 실패'));
+            };
+
+            reader.readAsText(file);
+        });
+    }
+
+    // 전체 데이터베이스 초기화 (개발/테스트용)
+    async clearAllData() {
+        const stores = ['users', 'transactions', 'assets', 'accounts', 'budgets'];
+        const promises = stores.map(storeName => {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                const request = store.clear();
+                
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        });
+
+        try {
+            await Promise.all(promises);
+            return true;
+        } catch (error) {
+            console.error('데이터 초기화 실패:', error);
+            throw new Error(`데이터 초기화 실패: ${error.message}`);
+        }
+    }
+
+    // === 가계부 사용자 관리 ===
+    async addAccountUser(userData) {
+        const transaction = this.db.transaction(['account_users'], 'readwrite');
+        const store = transaction.objectStore('account_users');
+
+        const user = {
+            id: this.generateId(),
+            ownerId: this.currentUserId,
+            name: userData.name,
+            relationship: userData.relationship || '',
+            birthDate: userData.birthDate || '',
+            gender: userData.gender || '',
+            occupation: userData.occupation || '',
+            phone: userData.phone || '',
+            notes: userData.notes || '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        return new Promise((resolve, reject) => {
+            const request = store.add(user);
+            request.onsuccess = () => resolve(user);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getAllAccountUsers() {
+        if (!this.currentUserId) {
+            throw new Error('로그인이 필요합니다.');
+        }
+
+        const transaction = this.db.transaction(['account_users'], 'readonly');
+        const store = transaction.objectStore('account_users');
+        const index = store.index('ownerId');
+
+        return new Promise((resolve, reject) => {
+            const request = index.getAll(this.currentUserId);
+            request.onsuccess = () => {
+                const users = request.result || [];
+                users.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                resolve(users);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getAccountUser(userId) {
+        const transaction = this.db.transaction(['account_users'], 'readonly');
+        const store = transaction.objectStore('account_users');
+
+        return new Promise((resolve, reject) => {
+            const request = store.get(userId);
+            request.onsuccess = () => {
+                const user = request.result;
+                if (user && user.ownerId === this.currentUserId) {
+                    resolve(user);
+                } else {
+                    resolve(null);
+                }
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async updateAccountUser(userId, userData) {
+        const transaction = this.db.transaction(['account_users'], 'readwrite');
+        const store = transaction.objectStore('account_users');
+
+        return new Promise(async (resolve, reject) => {
+            try {
+                const existingUser = await this.getAccountUser(userId);
+                if (!existingUser) {
+                    reject(new Error('사용자를 찾을 수 없습니다.'));
+                    return;
+                }
+
+                const updatedUser = {
+                    ...existingUser,
+                    name: userData.name,
+                    relationship: userData.relationship || '',
+                    birthDate: userData.birthDate || '',
+                    gender: userData.gender || '',
+                    occupation: userData.occupation || '',
+                    phone: userData.phone || '',
+                    notes: userData.notes || '',
+                    updatedAt: new Date().toISOString()
+                };
+
+                const request = store.put(updatedUser);
+                request.onsuccess = () => resolve(updatedUser);
+                request.onerror = () => reject(request.error);
+
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    async deleteAccountUser(userId) {
+        const transaction = this.db.transaction(['account_users'], 'readwrite');
+        const store = transaction.objectStore('account_users');
+
+        return new Promise(async (resolve, reject) => {
+            try {
+                const existingUser = await this.getAccountUser(userId);
+                if (!existingUser) {
+                    reject(new Error('사용자를 찾을 수 없습니다.'));
+                    return;
+                }
+
+                const request = store.delete(userId);
+                request.onsuccess = () => resolve(true);
+                request.onerror = () => reject(request.error);
+
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    // 기존 데이터를 첫 번째 사용자에게 매핑
+    async migrateDataToFirstUser() {
+        if (!this.currentUserId) {
+            throw new Error('로그인이 필요합니다.');
+        }
+
+        try {
+            const users = await this.getAllAccountUsers();
+            if (users.length === 0) {
+                return false;
+            }
+
+            const firstUser = users[0];
+            
+            // 거래 내역에 사용자 매핑
+            const transactionTx = this.db.transaction(['transactions'], 'readwrite');
+            const transactionStore = transactionTx.objectStore('transactions');
+            const transactionIndex = transactionStore.index('userId');
+            
+            const transactionRequest = transactionIndex.getAll(this.currentUserId);
+            await new Promise((resolve, reject) => {
+                transactionRequest.onsuccess = () => {
+                    const transactions = transactionRequest.result;
+                    const promises = transactions.map(transaction => {
+                        if (!transaction.accountUserId) {
+                            transaction.accountUserId = firstUser.id;
+                            transaction.updatedAt = new Date().toISOString();
+                            return new Promise((resolve, reject) => {
+                                const updateRequest = transactionStore.put(transaction);
+                                updateRequest.onsuccess = () => resolve();
+                                updateRequest.onerror = () => reject(updateRequest.error);
+                            });
+                        }
+                        return Promise.resolve();
+                    });
+                    
+                    Promise.all(promises).then(resolve).catch(reject);
+                };
+                transactionRequest.onerror = () => reject(transactionRequest.error);
+            });
+
+            // 자산에 사용자 매핑
+            const assetTx = this.db.transaction(['assets'], 'readwrite');
+            const assetStore = assetTx.objectStore('assets');
+            const assetIndex = assetStore.index('userId');
+            
+            const assetRequest = assetIndex.getAll(this.currentUserId);
+            await new Promise((resolve, reject) => {
+                assetRequest.onsuccess = () => {
+                    const assets = assetRequest.result;
+                    const promises = assets.map(asset => {
+                        if (!asset.accountUserId) {
+                            asset.accountUserId = firstUser.id;
+                            asset.updatedAt = new Date().toISOString();
+                            return new Promise((resolve, reject) => {
+                                const updateRequest = assetStore.put(asset);
+                                updateRequest.onsuccess = () => resolve();
+                                updateRequest.onerror = () => reject(updateRequest.error);
+                            });
+                        }
+                        return Promise.resolve();
+                    });
+                    
+                    Promise.all(promises).then(resolve).catch(reject);
+                };
+                assetRequest.onerror = () => reject(assetRequest.error);
+            });
+
+            return true;
+
+        } catch (error) {
+            console.error('데이터 마이그레이션 실패:', error);
+            throw error;
+        }
     }
 }
 
