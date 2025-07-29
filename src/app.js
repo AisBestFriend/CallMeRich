@@ -417,7 +417,7 @@ class AdvancedBudgetApp {
             
             const transactionsList = document.querySelector('.dashboard-container .transactions-list');
             if (transactionsList) {
-                transactionsList.innerHTML = this.renderTransactionsList(recentTransactions);
+                transactionsList.innerHTML = await this.renderTransactionsList(recentTransactions);
             }
 
             // 통계 데이터 로드 (포함 설정 적용됨)
@@ -567,7 +567,7 @@ class AdvancedBudgetApp {
             const transactions = await this.dbManager.getTransactions(null, filters);
             const transactionsList = document.querySelector('.transactions-list');
             if (transactionsList) {
-                transactionsList.innerHTML = this.renderTransactionsList(transactions);
+                transactionsList.innerHTML = await this.renderTransactionsList(transactions);
             }
         } catch (error) {
             console.error('거래 내역 로드 실패:', error);
@@ -579,10 +579,17 @@ class AdvancedBudgetApp {
     }
 
     // 거래 내역 목록 렌더링
-    renderTransactionsList(transactions) {
+    async renderTransactionsList(transactions) {
         if (!transactions || transactions.length === 0) {
             return '<div class="no-data">거래 내역이 없습니다.</div>';
         }
+
+        // 사용자 정보를 미리 로드
+        const users = await this.dbManager.getAllAccountUsers();
+        const userMap = users.reduce((map, user) => {
+            map[user.id] = user;
+            return map;
+        }, {});
 
         return transactions.map(transaction => {
             const category = this.transactionCategories[transaction.type]?.[transaction.category];
@@ -596,12 +603,17 @@ class AdvancedBudgetApp {
             const createdDate = new Date(transaction.createdAt).toLocaleDateString('ko-KR');
             const createdTime = new Date(transaction.createdAt).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'});
             
+            // 사용자 정보
+            const user = userMap[transaction.accountUserId];
+            const userInfo = user ? `${user.name}${user.relationship ? ` (${user.relationship})` : ''}` : '미지정';
+            
             return `
                 <div class="transaction-item">
                     <div class="transaction-icon">${categoryIcon}</div>
                     <div class="transaction-info">
                         <h4>${transaction.description}</h4>
                         <p>${categoryName} • ${transaction.date}</p>
+                        <p class="transaction-user">👤 ${userInfo}</p>
                         <p class="transaction-created">입력일: ${createdDate} ${createdTime}</p>
                         ${transaction.notes ? `<p class="transaction-notes">${transaction.notes}</p>` : ''}
                     </div>
@@ -1574,6 +1586,7 @@ class AdvancedBudgetApp {
                         </div>
                         
                         <form id="edit-transaction-form" class="modal-form">
+                            <input type="hidden" id="transaction-id" value="${transactionId}">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label>거래 유형 *</label>
@@ -1726,11 +1739,19 @@ class AdvancedBudgetApp {
         this.showToast('거래 추가 기능은 구현 예정입니다.');
     }
 
-    showAddAssetModal() {
+    async showAddAssetModal() {
         //console.log('자산 추가 모달 표시');
         
         // 자산 유형 옵션 생성
         const assetTypeOptions = this.generateAssetTypeOptions();
+
+        // 사용자 옵션 생성
+        const users = await this.dbManager.getAllAccountUsers();
+        const userOptions = users.map(user => `
+            <option value="${user.id}" ${user.id === this.selectedAccountUserId ? 'selected' : ''}>
+                ${user.name} ${user.relationship ? `(${user.relationship})` : ''}
+            </option>
+        `).join('');
         
         // 모달 HTML 생성
         const modalHtml = `
@@ -1811,6 +1832,15 @@ class AdvancedBudgetApp {
                             </div>
                         </div>
                         
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>사용자 *</label>
+                                <select id="asset-user" required>
+                                    ${userOptions}
+                                </select>
+                            </div>
+                        </div>
+                        
                         <div class="form-group">
                             <label>메모</label>
                             <textarea id="asset-notes" placeholder="추가 정보나 메모를 입력하세요" rows="3"></textarea>
@@ -1875,7 +1905,7 @@ class AdvancedBudgetApp {
             purchaseDate: form.querySelector('#asset-purchase-date').value,
             location: form.querySelector('#asset-location').value,
             notes: form.querySelector('#asset-notes').value,
-            accountUserId: this.selectedAccountUserId // 현재 선택된 사용자 ID 추가
+            accountUserId: form.querySelector('#asset-user').value // 선택된 사용자 ID
         };
         
         try {
@@ -2471,7 +2501,7 @@ class AdvancedBudgetApp {
     }
 
     // 거래 추가 모달 표시
-    showAddTransactionModal() {
+    async showAddTransactionModal() {
         //console.log('거래 추가 모달 표시');
         
         // 카테고리 옵션 생성
@@ -2487,6 +2517,14 @@ class AdvancedBudgetApp {
         const currencyOptions = Object.entries(this.currencies)
             .map(([code, curr]) => `<option value="${code}" ${code === this.currentUser.defaultCurrency ? 'selected' : ''}>${curr.symbol} ${curr.name}</option>`)
             .join('');
+
+        // 사용자 옵션 생성
+        const users = await this.dbManager.getAllAccountUsers();
+        const userOptions = users.map(user => `
+            <option value="${user.id}" ${user.id === this.selectedAccountUserId ? 'selected' : ''}>
+                ${user.name} ${user.relationship ? `(${user.relationship})` : ''}
+            </option>
+        `).join('');
         
         const modalHtml = `
             <div class="modal-overlay" id="transaction-modal">
@@ -2538,6 +2576,15 @@ class AdvancedBudgetApp {
                             <div class="form-group">
                                 <label>내용 *</label>
                                 <input type="text" id="transaction-description" required placeholder="거래 내용을 입력하세요">
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>사용자 *</label>
+                                <select id="transaction-user" required>
+                                    ${userOptions}
+                                </select>
                             </div>
                         </div>
                         
@@ -2602,7 +2649,7 @@ class AdvancedBudgetApp {
             date: document.getElementById('transaction-date').value,
             description: document.getElementById('transaction-description').value,
             notes: document.getElementById('transaction-notes').value,
-            accountUserId: this.selectedAccountUserId // 현재 선택된 사용자 ID 추가
+            accountUserId: document.getElementById('transaction-user').value // 선택된 사용자 ID
         };
         
         // 유효성 검사
@@ -2673,6 +2720,14 @@ class AdvancedBudgetApp {
             const currencyOptions = Object.entries(this.currencies)
                 .map(([code, curr]) => `<option value="${code}" ${code === transaction.currency ? 'selected' : ''}>${curr.symbol} ${curr.name}</option>`)
                 .join('');
+
+            // 사용자 옵션 생성
+            const users = await this.dbManager.getAllAccountUsers();
+            const userOptions = users.map(user => `
+                <option value="${user.id}" ${user.id === transaction.accountUserId ? 'selected' : ''}>
+                    ${user.name} ${user.relationship ? `(${user.relationship})` : ''}
+                </option>
+            `).join('');
             
             const modalHtml = `
                 <div class="modal-overlay" id="transaction-modal">
@@ -2730,6 +2785,15 @@ class AdvancedBudgetApp {
                                 </div>
                             </div>
                             
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>사용자 *</label>
+                                    <select id="transaction-user" required>
+                                        ${userOptions}
+                                    </select>
+                                </div>
+                            </div>
+                            
                             <div class="form-group">
                                 <label>메모</label>
                                 <textarea id="transaction-notes" rows="3">${transaction.notes || ''}</textarea>
@@ -2777,7 +2841,8 @@ class AdvancedBudgetApp {
             currency: document.getElementById('transaction-currency').value,
             date: document.getElementById('transaction-date').value,
             description: document.getElementById('transaction-description').value,
-            notes: document.getElementById('transaction-notes').value
+            notes: document.getElementById('transaction-notes').value,
+            accountUserId: document.getElementById('transaction-user').value // 선택된 사용자 ID
         };
         
         // 유효성 검사
