@@ -838,17 +838,26 @@
 }
 
 .period-selector,
-.chart-type-selector {
+.chart-type-selector,
+.growth-rate-toggle {
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
 
 .period-selector label,
-.chart-type-selector label {
+.chart-type-selector label,
+.growth-rate-toggle label {
     font-weight: 500;
     color: var(--dark-color);
     font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+.growth-rate-toggle input[type="checkbox"] {
+    margin-right: 0.25rem;
+    cursor: pointer;
+    transform: scale(1.1);
 }
 
 .period-selector select,
@@ -1291,7 +1300,8 @@
     }
     
     .period-selector,
-    .chart-type-selector {
+    .chart-type-selector,
+    .growth-rate-toggle {
         justify-content: space-between;
     }
     

@@ -853,6 +853,12 @@ class AdvancedBudgetApp {
                             <option value="mixed">혼합형</option>
                         </select>
                     </div>
+                    <div class="growth-rate-toggle">
+                        <label>
+                            <input type="checkbox" id="show-growth-rates" checked onchange="budgetApp.toggleGrowthRates()">
+                            증감률 표시
+                        </label>
+                    </div>
                 </div>
                 
                 <div class="chart-container">
@@ -970,7 +976,9 @@ class AdvancedBudgetApp {
                 income: 0,
                 expense: 0,
                 balance: 0,
-                changeRate: null
+                changeRate: null,
+                incomeGrowthRate: null,
+                expenseGrowthRate: null
             };
         }
 
@@ -988,18 +996,33 @@ class AdvancedBudgetApp {
             }
         });
 
-        // 수지 계산 및 변화율 계산
+        // 수지 계산 및 증감률 계산
         const monthlyDetails = Object.values(monthlyStats);
         let previousBalance = null;
+        let previousIncome = null;
+        let previousExpense = null;
 
         monthlyDetails.forEach(month => {
             month.balance = month.income - month.expense;
             
+            // 수지 변화율 계산
             if (previousBalance !== null && previousBalance !== 0) {
                 month.changeRate = ((month.balance - previousBalance) / Math.abs(previousBalance)) * 100;
             }
             
+            // 수입 증감률 계산
+            if (previousIncome !== null && previousIncome > 0) {
+                month.incomeGrowthRate = ((month.income - previousIncome) / previousIncome) * 100;
+            }
+            
+            // 지출 증감률 계산
+            if (previousExpense !== null && previousExpense > 0) {
+                month.expenseGrowthRate = ((month.expense - previousExpense) / previousExpense) * 100;
+            }
+            
             previousBalance = month.balance;
+            previousIncome = month.income;
+            previousExpense = month.expense;
         });
 
         // 평균값 계산
@@ -1032,7 +1055,9 @@ class AdvancedBudgetApp {
             labels: monthlyDetails.map(month => month.yearMonth.replace('년 ', '/').replace('월', '')),
             income: monthlyDetails.map(month => month.income),
             expense: monthlyDetails.map(month => month.expense),
-            balance: monthlyDetails.map(month => month.balance)
+            balance: monthlyDetails.map(month => month.balance),
+            incomeGrowthRate: monthlyDetails.map(month => month.incomeGrowthRate || 0),
+            expenseGrowthRate: monthlyDetails.map(month => month.expenseGrowthRate || 0)
         };
     }
 
@@ -1051,6 +1076,7 @@ class AdvancedBudgetApp {
         // 차트 데이터 가져오기
         const chartType = document.getElementById('chart-type')?.value || 'mixed';
         const period = parseInt(document.getElementById('chart-period')?.value) || 12;
+        const showGrowthRates = document.getElementById('show-growth-rates')?.checked !== false;
         
         this.dbManager.getTransactions().then(transactions => {
             const monthlyData = this.processMonthlyData(transactions, period);
@@ -1065,16 +1091,50 @@ class AdvancedBudgetApp {
                         data: chartData.income,
                         backgroundColor: 'rgba(76, 175, 80, 0.7)',
                         borderColor: 'rgba(76, 175, 80, 1)',
-                        borderWidth: 2
+                        borderWidth: 2,
+                        type: 'bar',
+                        yAxisID: 'y'
                     },
                     {
                         label: '지출',
                         data: chartData.expense,
                         backgroundColor: 'rgba(244, 67, 54, 0.7)',
                         borderColor: 'rgba(244, 67, 54, 1)',
-                        borderWidth: 2
+                        borderWidth: 2,
+                        type: 'bar',
+                        yAxisID: 'y'
                     }
                 ];
+                
+                // 증감률 표시 옵션이 활성화된 경우 추가
+                if (showGrowthRates) {
+                    datasets.push(
+                        {
+                            label: '수입 증감률',
+                            data: chartData.incomeGrowthRate,
+                            borderColor: 'rgba(76, 175, 80, 1)',
+                            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                            borderWidth: 3,
+                            type: 'line',
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1',
+                            borderDash: [5, 5]
+                        },
+                        {
+                            label: '지출 증감률',
+                            data: chartData.expenseGrowthRate,
+                            borderColor: 'rgba(244, 67, 54, 1)',
+                            backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                            borderWidth: 3,
+                            type: 'line',
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1',
+                            borderDash: [10, 5]
+                        }
+                    );
+                }
             } else if (chartType === 'line') {
                 datasets = [
                     {
@@ -1095,7 +1155,8 @@ class AdvancedBudgetApp {
                         backgroundColor: 'rgba(76, 175, 80, 0.7)',
                         borderColor: 'rgba(76, 175, 80, 1)',
                         borderWidth: 2,
-                        type: 'bar'
+                        type: 'bar',
+                        yAxisID: 'y'
                     },
                     {
                         label: '지출',
@@ -1103,7 +1164,8 @@ class AdvancedBudgetApp {
                         backgroundColor: 'rgba(244, 67, 54, 0.7)',
                         borderColor: 'rgba(244, 67, 54, 1)',
                         borderWidth: 2,
-                        type: 'bar'
+                        type: 'bar',
+                        yAxisID: 'y'
                     },
                     {
                         label: '수지',
@@ -1114,9 +1176,39 @@ class AdvancedBudgetApp {
                         type: 'line',
                         fill: false,
                         tension: 0.4,
-                        yAxisID: 'y1'
+                        yAxisID: 'y'
                     }
                 ];
+                
+                // 증감률 표시 옵션이 활성화된 경우 추가
+                if (showGrowthRates) {
+                    datasets.push(
+                        {
+                            label: '수입 증감률',
+                            data: chartData.incomeGrowthRate,
+                            borderColor: 'rgba(139, 195, 74, 1)',
+                            backgroundColor: 'rgba(139, 195, 74, 0.1)',
+                            borderWidth: 2,
+                            type: 'line',
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1',
+                            borderDash: [5, 5]
+                        },
+                        {
+                            label: '지출 증감률',
+                            data: chartData.expenseGrowthRate,
+                            borderColor: 'rgba(255, 138, 128, 1)',
+                            backgroundColor: 'rgba(255, 138, 128, 0.1)',
+                            borderWidth: 2,
+                            type: 'line',
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1',
+                            borderDash: [10, 5]
+                        }
+                    );
+                }
             }
 
             const config = {
@@ -1149,8 +1241,16 @@ class AdvancedBudgetApp {
                             callbacks: {
                                 label: (context) => {
                                     const value = context.parsed.y;
+                                    const datasetLabel = context.dataset.label;
+                                    
+                                    // 증감률 데이터인 경우
+                                    if (datasetLabel.includes('증감률')) {
+                                        return `${datasetLabel}: ${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+                                    }
+                                    
+                                    // 금액 데이터인 경우
                                     const formattedValue = this.formatCurrency(Math.abs(value), this.currentUser.defaultCurrency);
-                                    return `${context.dataset.label}: ${value >= 0 ? '+' : '-'}${formattedValue}`;
+                                    return `${datasetLabel}: ${value >= 0 ? '+' : '-'}${formattedValue}`;
                                 }
                             }
                         }
@@ -1164,7 +1264,9 @@ class AdvancedBudgetApp {
                             }
                         },
                         y: {
+                            type: 'linear',
                             display: true,
+                            position: 'left',
                             title: {
                                 display: true,
                                 text: '금액'
@@ -1174,21 +1276,31 @@ class AdvancedBudgetApp {
                                     return this.formatCurrency(Math.abs(value), this.currentUser.defaultCurrency);
                                 }
                             }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: '증감률 (%)'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            ticks: {
+                                callback: (value) => {
+                                    return value.toFixed(1) + '%';
+                                }
+                            }
                         }
                     }
                 }
             };
 
-            // 혼합형 차트를 위한 추가 Y축 설정
-            if (chartType === 'mixed') {
-                config.options.scales.y1 = {
-                    type: 'linear',
-                    display: false,
-                    position: 'right',
-                    grid: {
-                        drawOnChartArea: false,
-                    },
-                };
+            // 증감률이 표시되지 않거나 Line 차트인 경우 Y1 축 숨기기
+            if (chartType === 'line' || !showGrowthRates) {
+                config.options.scales.y1.display = false;
             }
 
             this.monthlyChart = new Chart(ctx, config);
@@ -1202,6 +1314,11 @@ class AdvancedBudgetApp {
 
     // 차트 유형 업데이트
     updateChartType() {
+        this.createMonthlyChart();
+    }
+
+    // 증감률 표시 토글
+    toggleGrowthRates() {
         this.createMonthlyChart();
     }
 
