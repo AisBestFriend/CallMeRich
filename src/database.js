@@ -89,11 +89,12 @@ class DatabaseManager {
             id: this.generateId(),
             username: userData.username,
             email: userData.email,
+            password: userData.password, // 비밀번호 추가
             displayName: userData.displayName,
             defaultCurrency: userData.defaultCurrency || 'KRW',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            settings: {
+            settings: userData.settings || {
                 theme: 'auto',
                 language: 'ko',
                 dateFormat: 'YYYY-MM-DD',
@@ -152,6 +153,67 @@ class DatabaseManager {
                 }
             };
             getRequest.onerror = () => reject(getRequest.error);
+        });
+    }
+
+    // 새 사용자 추가 (alias for createUser)
+    async addUser(userData) {
+        return await this.createUser(userData);
+    }
+
+    // 모든 사용자 조회
+    async getUsers() {
+        const transaction = this.db.transaction(['users'], 'readonly');
+        const store = transaction.objectStore('users');
+        
+        return new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // 모든 사용자 비밀번호 일괄 초기화
+    async resetAllPasswords(newPassword = '111111') {
+        const transaction = this.db.transaction(['users'], 'readwrite');
+        const store = transaction.objectStore('users');
+        
+        return new Promise((resolve, reject) => {
+            let updatedCount = 0;
+            let totalCount = 0;
+            
+            const request = store.getAll();
+            request.onsuccess = () => {
+                const users = request.result;
+                totalCount = users.length;
+                
+                if (totalCount === 0) {
+                    resolve({ success: true, updated: 0, total: 0 });
+                    return;
+                }
+                
+                users.forEach(user => {
+                    user.password = newPassword;
+                    user.updatedAt = new Date().toISOString();
+                    
+                    const updateRequest = store.put(user);
+                    updateRequest.onsuccess = () => {
+                        updatedCount++;
+                        if (updatedCount === totalCount) {
+                            resolve({ 
+                                success: true, 
+                                updated: updatedCount, 
+                                total: totalCount,
+                                newPassword: newPassword
+                            });
+                        }
+                    };
+                    updateRequest.onerror = () => {
+                        reject(new Error(`사용자 ${user.email}의 비밀번호 업데이트 실패`));
+                    };
+                });
+            };
+            request.onerror = () => reject(new Error('사용자 목록 조회 실패'));
         });
     }
 

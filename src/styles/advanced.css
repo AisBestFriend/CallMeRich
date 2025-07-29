@@ -1766,3 +1766,63 @@
         border-color: #555;
     }
 }
+
+/* === 설정 페이지 스타일 === */
+.settings-view {
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.settings-section {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--box-shadow);
+}
+
+.settings-section h3 {
+    margin: 0 0 1rem 0;
+    color: var(--dark-color);
+    font-size: var(--font-size-lg);
+}
+
+.admin-controls {
+    margin-top: 1rem;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-danger:hover {
+    background-color: #d32f2f;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.btn-danger:active {
+    transform: translateY(0);
+}
+
+.warning-text {
+    color: var(--warning-color);
+    font-size: var(--font-size-sm);
+    margin-top: 0.5rem;
+    margin-bottom: 0;
+    font-weight: 500;
+}
+
+/* === 설정 페이지 끝 === */

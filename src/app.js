@@ -191,6 +191,10 @@ class AdvancedBudgetApp {
                             <label>이메일</label>
                             <input type="email" id="login-email" required>
                         </div>
+                        <div class="form-group">
+                            <label>비밀번호</label>
+                            <input type="password" id="login-password" required minlength="6" placeholder="최소 6자 이상">
+                        </div>
                         <button type="submit" class="btn-primary">로그인</button>
                     </form>
                     
@@ -203,6 +207,14 @@ class AdvancedBudgetApp {
                         <div class="form-group">
                             <label>이메일</label>
                             <input type="email" id="register-email" required>
+                        </div>
+                        <div class="form-group">
+                            <label>비밀번호</label>
+                            <input type="password" id="register-password" required minlength="6" placeholder="최소 6자 이상">
+                        </div>
+                        <div class="form-group">
+                            <label>비밀번호 확인</label>
+                            <input type="password" id="register-password-confirm" required minlength="6" placeholder="비밀번호를 다시 입력하세요">
                         </div>
                         <div class="form-group">
                             <label>표시명</label>
@@ -1005,19 +1017,11 @@ class AdvancedBudgetApp {
         monthlyDetails.forEach(month => {
             month.balance = month.income - month.expense;
             
-            // 수지 변화율 계산
+            // 수입-지출 증감률 계산 (순수익 증감률)
             if (previousBalance !== null && previousBalance !== 0) {
-                month.changeRate = ((month.balance - previousBalance) / Math.abs(previousBalance)) * 100;
-            }
-            
-            // 수입 증감률 계산
-            if (previousIncome !== null && previousIncome > 0) {
-                month.incomeGrowthRate = ((month.income - previousIncome) / previousIncome) * 100;
-            }
-            
-            // 지출 증감률 계산
-            if (previousExpense !== null && previousExpense > 0) {
-                month.expenseGrowthRate = ((month.expense - previousExpense) / previousExpense) * 100;
+                month.netIncomeGrowthRate = ((month.balance - previousBalance) / Math.abs(previousBalance)) * 100;
+                // 기존 변화율도 동일하게 설정 (하위 호환성)
+                month.changeRate = month.netIncomeGrowthRate;
             }
             
             previousBalance = month.balance;
@@ -1056,8 +1060,7 @@ class AdvancedBudgetApp {
             income: monthlyDetails.map(month => month.income),
             expense: monthlyDetails.map(month => month.expense),
             balance: monthlyDetails.map(month => month.balance),
-            incomeGrowthRate: monthlyDetails.map(month => month.incomeGrowthRate || 0),
-            expenseGrowthRate: monthlyDetails.map(month => month.expenseGrowthRate || 0)
+            netIncomeGrowthRate: monthlyDetails.map(month => month.netIncomeGrowthRate || 0)
         };
     }
 
@@ -1110,28 +1113,16 @@ class AdvancedBudgetApp {
                 if (showGrowthRates) {
                     datasets.push(
                         {
-                            label: '수입 증감률',
-                            data: chartData.incomeGrowthRate,
-                            borderColor: 'rgba(76, 175, 80, 1)',
-                            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                            label: '수입-지출 증감률 (%)',
+                            data: chartData.netIncomeGrowthRate,
+                            borderColor: 'rgba(156, 39, 176, 1)',
+                            backgroundColor: 'rgba(156, 39, 176, 0.1)',
                             borderWidth: 3,
                             type: 'line',
                             fill: false,
                             tension: 0.4,
                             yAxisID: 'y1',
-                            borderDash: [5, 5]
-                        },
-                        {
-                            label: '지출 증감률',
-                            data: chartData.expenseGrowthRate,
-                            borderColor: 'rgba(244, 67, 54, 1)',
-                            backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                            borderWidth: 3,
-                            type: 'line',
-                            fill: false,
-                            tension: 0.4,
-                            yAxisID: 'y1',
-                            borderDash: [10, 5]
+                            borderDash: [8, 4]
                         }
                     );
                 }
@@ -1184,28 +1175,16 @@ class AdvancedBudgetApp {
                 if (showGrowthRates) {
                     datasets.push(
                         {
-                            label: '수입 증감률',
-                            data: chartData.incomeGrowthRate,
-                            borderColor: 'rgba(139, 195, 74, 1)',
-                            backgroundColor: 'rgba(139, 195, 74, 0.1)',
+                            label: '수입-지출 증감률 (%)',
+                            data: chartData.netIncomeGrowthRate,
+                            borderColor: 'rgba(156, 39, 176, 1)',
+                            backgroundColor: 'rgba(156, 39, 176, 0.1)',
                             borderWidth: 2,
                             type: 'line',
                             fill: false,
                             tension: 0.4,
                             yAxisID: 'y1',
-                            borderDash: [5, 5]
-                        },
-                        {
-                            label: '지출 증감률',
-                            data: chartData.expenseGrowthRate,
-                            borderColor: 'rgba(255, 138, 128, 1)',
-                            backgroundColor: 'rgba(255, 138, 128, 0.1)',
-                            borderWidth: 2,
-                            type: 'line',
-                            fill: false,
-                            tension: 0.4,
-                            yAxisID: 'y1',
-                            borderDash: [10, 5]
+                            borderDash: [8, 4]
                         }
                     );
                 }
@@ -2597,6 +2576,342 @@ class AdvancedBudgetApp {
     // 에러 메시지 표시
     showError(message) {
         this.showToast(message, 'error');
+    }
+
+    // 이벤트 리스너 설정
+    setupEventListeners() {
+        console.log('이벤트 리스너 설정 시작');
+        
+        // 전역 이벤트 위임 사용
+        document.addEventListener('click', (e) => {
+            // 인증 탭 전환
+            if (e.target.matches('.auth-tab')) {
+                this.handleAuthTabClick(e);
+            }
+            
+            // 네비게이션 클릭 (전체 버튼 영역)
+            if (e.target.matches('.nav-item') || e.target.closest('.nav-item')) {
+                this.handleNavigationClick(e);
+            }
+            
+            // 로그아웃 버튼
+            if (e.target.matches('#logout-btn')) {
+                this.logout();
+            }
+        });
+        
+        // 폼 제출 이벤트
+        document.addEventListener('submit', (e) => {
+            if (e.target.matches('#login-form')) {
+                e.preventDefault();
+                this.handleLogin(e);
+            }
+            
+            if (e.target.matches('#register-form')) {
+                e.preventDefault();
+                this.handleRegister(e);
+            }
+        });
+        
+        console.log('이벤트 리스너 설정 완료');
+    }
+
+    // 인증 탭 클릭 처리
+    handleAuthTabClick(e) {
+        const tabName = e.target.dataset.tab;
+        
+        // 모든 탭 비활성화
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // 모든 폼 숨기기
+        document.querySelectorAll('.auth-form').forEach(form => {
+            form.style.display = 'none';
+        });
+        
+        // 클릭된 탭 활성화
+        e.target.classList.add('active');
+        
+        // 해당 폼 표시
+        const targetForm = document.getElementById(`${tabName}-form`);
+        if (targetForm) {
+            targetForm.style.display = 'block';
+        }
+    }
+
+    // 네비게이션 클릭 처리
+    handleNavigationClick(e) {
+        e.preventDefault();
+        
+        // 클릭된 요소가 nav-item이 아니라면 부모에서 찾기
+        const navItem = e.target.matches('.nav-item') ? e.target : e.target.closest('.nav-item');
+        
+        if (!navItem) return;
+        
+        const viewName = navItem.dataset.nav;
+        
+        if (viewName && viewName !== this.currentView) {
+            // 기존 navigateTo 메서드가 있다면 우선 사용
+            if (typeof this.navigateTo === 'function') {
+                this.navigateTo(viewName);
+            } else {
+                this.showView(viewName);
+            }
+        }
+    }
+
+    // 뷰 전환
+    showView(viewName) {
+        console.log(`뷰 전환: ${this.currentView} → ${viewName}`);
+        
+        // 현재 뷰 업데이트
+        this.currentView = viewName;
+        
+        // 네비게이션 활성화 상태 업데이트
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        const activeNavItem = document.querySelector(`[data-nav="${viewName}"]`);
+        if (activeNavItem) {
+            activeNavItem.classList.add('active');
+        }
+        
+        // 뷰에 따른 콘텐츠 로드
+        const mainContent = document.getElementById('main-content');
+        if (!mainContent) {
+            console.error('main-content 요소를 찾을 수 없습니다.');
+            return;
+        }
+        
+        switch (viewName) {
+            case 'dashboard':
+                this.loadDashboardView();
+                break;
+            case 'transactions':
+                this.loadTransactionsView();
+                break;
+            case 'assets':
+                this.loadAssetsView();
+                break;
+            case 'reports':
+                this.loadReportsView();
+                break;
+            case 'settings':
+                this.loadSettingsView();
+                break;
+            default:
+                console.warn(`알 수 없는 뷰: ${viewName}`);
+                this.loadDashboardView(); // 기본값으로 대시보드 로드
+        }
+    }
+
+    // 대시보드 뷰 로드
+    loadDashboardView() {
+        const mainContent = document.getElementById('main-content');
+        mainContent.innerHTML = '<div class="loading">대시보드를 로드하는 중...</div>';
+        
+        // 기존 대시보드 로직 호출
+        if (typeof this.loadDashboardData === 'function') {
+            this.loadDashboardData();
+        } else {
+            mainContent.innerHTML = `
+                <div class="dashboard-placeholder">
+                    <h2>🏠 대시보드</h2>
+                    <p>대시보드 기능이 구현 중입니다.</p>
+                </div>
+            `;
+        }
+    }
+
+    // 거래내역 뷰 로드
+    loadTransactionsView() {
+        const mainContent = document.getElementById('main-content');
+        mainContent.innerHTML = `
+            <div class="transactions-view">
+                <h2>💳 거래내역</h2>
+                <p>거래내역 기능이 구현 중입니다.</p>
+            </div>
+        `;
+    }
+
+    // 자산관리 뷰 로드
+    loadAssetsView() {
+        const mainContent = document.getElementById('main-content');
+        mainContent.innerHTML = `
+            <div class="assets-view">
+                <h2>🏦 자산관리</h2>
+                <p>자산관리 기능이 구현 중입니다.</p>
+            </div>
+        `;
+    }
+
+    // 리포트 뷰 로드
+    loadReportsView() {
+        const mainContent = document.getElementById('main-content');
+        mainContent.innerHTML = `
+            <div class="reports-view">
+                <h2>📊 리포트</h2>
+                <p>리포트 기능이 구현 중입니다.</p>
+            </div>
+        `;
+    }
+
+    // 설정 뷰 로드
+    loadSettingsView() {
+        const mainContent = document.getElementById('main-content');
+        mainContent.innerHTML = `
+            <div class="settings-view">
+                <h2>⚙️ 설정</h2>
+                
+                <div class="settings-section">
+                    <h3>🔧 관리자 기능</h3>
+                    <div class="admin-controls">
+                        <button id="reset-all-passwords-btn" class="btn-danger" onclick="budgetApp.resetAllUserPasswords()">
+                            🔑 모든 계정 비밀번호 초기화 (111111)
+                        </button>
+                        <p class="warning-text">⚠️ 이 기능은 데이터베이스의 모든 사용자 비밀번호를 111111로 변경합니다.</p>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3>📱 앱 정보</h3>
+                    <p>하이브리드 가계부 Pro v1.0</p>
+                    <p>개인 맞춤형 재정 관리 솔루션</p>
+                </div>
+            </div>
+        `;
+    }
+
+    // 모든 사용자 비밀번호 초기화
+    async resetAllUserPasswords() {
+        const confirmMessage = `모든 사용자의 비밀번호를 '111111'으로 초기화하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`;
+        
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            this.showToast('비밀번호 초기화 중...', 'info');
+            
+            const result = await this.dbManager.resetAllPasswords('111111');
+            
+            if (result.success) {
+                this.showToast(`✅ 성공: ${result.updated}명의 사용자 비밀번호가 '${result.newPassword}'로 초기화되었습니다.`, 'success');
+                console.log('비밀번호 초기화 결과:', result);
+            } else {
+                this.showError('비밀번호 초기화에 실패했습니다.');
+            }
+            
+        } catch (error) {
+            console.error('비밀번호 초기화 실패:', error);
+            this.showError(`비밀번호 초기화 실패: ${error.message}`);
+        }
+    }
+
+    // 로그인 처리
+    async handleLogin(e) {
+        try {
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            
+            if (!email || !password) {
+                this.showError('이메일과 비밀번호를 모두 입력해주세요.');
+                return;
+            }
+            
+            if (password.length < 6) {
+                this.showError('비밀번호는 최소 6자 이상이어야 합니다.');
+                return;
+            }
+            
+            // 사용자 조회
+            const users = await this.dbManager.getUsers();
+            const user = users.find(u => u.email === email);
+            
+            if (!user) {
+                this.showError('등록되지 않은 이메일입니다.');
+                return;
+            }
+            
+            // 비밀번호 검증 (실제 프로덕션에서는 해시 비교 필요)
+            if (user.password !== password) {
+                this.showError('비밀번호가 올바르지 않습니다.');
+                return;
+            }
+            
+            // 로그인 성공
+            this.currentUser = user;
+            this.dbManager.setCurrentUser(user.id);
+            this.showMainApp();
+            this.showToast('로그인되었습니다.');
+            
+        } catch (error) {
+            console.error('로그인 실패:', error);
+            this.showError('로그인 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 회원가입 처리
+    async handleRegister(e) {
+        try {
+            const username = document.getElementById('register-username').value.trim();
+            const email = document.getElementById('register-email').value.trim();
+            const password = document.getElementById('register-password').value;
+            const passwordConfirm = document.getElementById('register-password-confirm').value;
+            const displayName = document.getElementById('register-displayname').value.trim();
+            const currency = document.getElementById('register-currency').value;
+            
+            // 유효성 검사
+            if (!username || !email || !password || !passwordConfirm || !displayName) {
+                this.showError('모든 필드를 입력해주세요.');
+                return;
+            }
+            
+            if (password.length < 6) {
+                this.showError('비밀번호는 최소 6자 이상이어야 합니다.');
+                return;
+            }
+            
+            if (password !== passwordConfirm) {
+                this.showError('비밀번호가 일치하지 않습니다.');
+                return;
+            }
+            
+            // 이메일 중복 확인
+            const users = await this.dbManager.getUsers();
+            if (users.some(u => u.email === email)) {
+                this.showError('이미 등록된 이메일입니다.');
+                return;
+            }
+            
+            // 사용자 생성
+            const userId = await this.dbManager.addUser({
+                username,
+                email,
+                password, // 실제 프로덕션에서는 해시화 필요
+                displayName,
+                defaultCurrency: currency,
+                settings: {
+                    inclusionSettings: this.getDefaultInclusionSettings()
+                },
+                createdAt: new Date().toISOString()
+            });
+            
+            // 기본 계좌 생성
+            await this.createDefaultAccount(userId);
+            
+            // 자동 로그인
+            this.currentUser = await this.dbManager.getUser(userId);
+            this.dbManager.setCurrentUser(userId);
+            this.showMainApp();
+            this.showToast('회원가입이 완료되었습니다.');
+            
+        } catch (error) {
+            console.error('회원가입 실패:', error);
+            this.showError('회원가입 중 오류가 발생했습니다.');
+        }
     }
 }
 
