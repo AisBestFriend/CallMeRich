@@ -75,6 +75,11 @@ class DatabaseManager {
         return this.currentUserId;
     }
 
+    // 고유 ID 생성
+    generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
     // === 사용자 관리 ===
     async createUser(userData) {
         const transaction = this.db.transaction(['users'], 'readwrite');
@@ -126,6 +131,30 @@ class DatabaseManager {
         });
     }
 
+    async updateUser(userId, updateData) {
+        const transaction = this.db.transaction(['users'], 'readwrite');
+        const store = transaction.objectStore('users');
+        
+        return new Promise((resolve, reject) => {
+            const getRequest = store.get(userId);
+            getRequest.onsuccess = () => {
+                const user = getRequest.result;
+                if (user) {
+                    Object.assign(user, updateData, {
+                        updatedAt: new Date().toISOString()
+                    });
+                    
+                    const updateRequest = store.put(user);
+                    updateRequest.onsuccess = () => resolve(user);
+                    updateRequest.onerror = () => reject(updateRequest.error);
+                } else {
+                    reject(new Error('User not found'));
+                }
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+    }
+
     // === 거래 내역 관리 ===
     async createTransaction(transactionData) {
         const transaction = this.db.transaction(['transactions'], 'readwrite');
@@ -154,6 +183,24 @@ class DatabaseManager {
         return new Promise((resolve, reject) => {
             const request = store.add(txn);
             request.onsuccess = () => resolve(txn);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getTransaction(id) {
+        const transaction = this.db.transaction(['transactions'], 'readonly');
+        const store = transaction.objectStore('transactions');
+        
+        return new Promise((resolve, reject) => {
+            const request = store.get(id);
+            request.onsuccess = () => {
+                const txn = request.result;
+                if (txn && txn.userId === this.currentUserId) {
+                    resolve(txn);
+                } else {
+                    resolve(null);
+                }
+            };
             request.onerror = () => reject(request.error);
         });
     }
@@ -301,6 +348,24 @@ class DatabaseManager {
         });
     }
 
+    async getAsset(id) {
+        const transaction = this.db.transaction(['assets'], 'readonly');
+        const store = transaction.objectStore('assets');
+        
+        return new Promise((resolve, reject) => {
+            const request = store.get(id);
+            request.onsuccess = () => {
+                const asset = request.result;
+                if (asset && asset.userId === this.currentUserId) {
+                    resolve(asset);
+                } else {
+                    resolve(null);
+                }
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
     async updateAsset(id, updateData) {
         const transaction = this.db.transaction(['assets'], 'readwrite');
         const store = transaction.objectStore('assets');
@@ -375,15 +440,16 @@ class DatabaseManager {
     }
 
     // === 유틸리티 함수 ===
-    generateId() {
-        return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
 
-    // 데이터 통계
+    // 데이터 통계 (포함 설정 적용)
     async getStatistics(userId = null, period = 'month') {
         userId = userId || this.currentUserId;
         const transactions = await this.getTransactions(userId);
         const assets = await this.getAssets(userId);
+        
+        // 사용자 설정에서 포함 설정 가져오기
+        const user = await this.getUser(userId);
+        const inclusionSettings = user?.settings?.inclusionSettings || this.getDefaultInclusionSettings();
         
         // 기간 계산
         const now = new Date();
@@ -407,15 +473,26 @@ class DatabaseManager {
             new Date(t.date) >= startDate
         );
 
-        const income = periodTransactions
+        // 포함 설정에 따라 거래 필터링
+        const filteredTransactions = periodTransactions.filter(t => {
+            const categorySettings = inclusionSettings.transactions[t.type];
+            return categorySettings && categorySettings[t.category] !== false;
+        });
+
+        const income = filteredTransactions
             .filter(t => t.type === 'income')
             .reduce((sum, t) => sum + t.amount, 0);
             
-        const expenses = periodTransactions
+        const expenses = filteredTransactions
             .filter(t => t.type === 'expense')
             .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-        const totalAssets = assets.reduce((sum, a) => sum + a.currentValue, 0);
+        // 포함 설정에 따라 자산 필터링
+        const filteredAssets = assets.filter(a => {
+            return inclusionSettings.assets[a.type] !== false;
+        });
+
+        const totalAssets = filteredAssets.reduce((sum, a) => sum + a.currentValue, 0);
 
         return {
             period,
@@ -424,8 +501,53 @@ class DatabaseManager {
             balance: income - expenses,
             totalAssets,
             netWorth: totalAssets,
-            transactionCount: periodTransactions.length,
-            categoryBreakdown: this.getCategoryBreakdown(periodTransactions)
+            transactionCount: filteredTransactions.length,
+            categoryBreakdown: this.getCategoryBreakdown(filteredTransactions),
+            filteredCounts: {
+                includedTransactions: filteredTransactions.length,
+                totalTransactions: periodTransactions.length,
+                includedAssets: filteredAssets.length,
+                totalAssets: assets.length
+            }
+        };
+    }
+
+    // 기본 포함 설정 반환 (데이터베이스용)
+    getDefaultInclusionSettings() {
+        // 이 메서드는 앱 클래스의 assetTypes와 transactionCategories를 참조할 수 없으므로
+        // 기본값으로 모든 항목을 포함하도록 설정
+        return {
+            assets: {
+                'real_estate': true,
+                'securities': true,
+                'cash': true,
+                'crypto': true,
+                'commodity': true,
+                'other': true
+            },
+            transactions: {
+                income: {
+                    'salary': true,
+                    'business': true,
+                    'investment': true,
+                    'bonus': true,
+                    'freelance': true,
+                    'rental': true,
+                    'other': true
+                },
+                expense: {
+                    'food': true,
+                    'transportation': true,
+                    'shopping': true,
+                    'utility': true,
+                    'healthcare': true,
+                    'education': true,
+                    'entertainment': true,
+                    'housing': true,
+                    'insurance': true,
+                    'other': true
+                }
+            }
         };
     }
 
@@ -437,6 +559,83 @@ class DatabaseManager {
             }
         });
         return breakdown;
+    }
+
+    // calculateFinancialSummary의 별칭 (호환성)
+    async calculateFinancialSummary(period = 'month', userId = null) {
+        return await this.getStatistics(userId, period);
+    }
+
+    // === 계정 관리 ===
+    async createAccount(accountData) {
+        const transaction = this.db.transaction(['accounts'], 'readwrite');
+        const store = transaction.objectStore('accounts');
+        
+        const account = {
+            id: this.generateId(),
+            userId: this.currentUserId,
+            name: accountData.name,
+            type: accountData.type, // 'bank', 'credit_card', 'cash', 'digital_wallet'
+            balance: parseFloat(accountData.balance) || 0,
+            currency: accountData.currency || 'KRW',
+            isDefault: accountData.isDefault || false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        return new Promise((resolve, reject) => {
+            const request = store.add(account);
+            request.onsuccess = () => resolve(account);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getAccounts(userId = null) {
+        userId = userId || this.currentUserId;
+        const transaction = this.db.transaction(['accounts'], 'readonly');
+        const store = transaction.objectStore('accounts');
+        const index = store.index('userId');
+        
+        return new Promise((resolve, reject) => {
+            const request = index.getAll(userId);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async updateAccount(accountId, updateData) {
+        const transaction = this.db.transaction(['accounts'], 'readwrite');
+        const store = transaction.objectStore('accounts');
+        
+        return new Promise((resolve, reject) => {
+            const getRequest = store.get(accountId);
+            getRequest.onsuccess = () => {
+                const account = getRequest.result;
+                if (account) {
+                    Object.assign(account, updateData, {
+                        updatedAt: new Date().toISOString()
+                    });
+                    
+                    const updateRequest = store.put(account);
+                    updateRequest.onsuccess = () => resolve(account);
+                    updateRequest.onerror = () => reject(updateRequest.error);
+                } else {
+                    reject(new Error('Account not found'));
+                }
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+    }
+
+    async deleteAccount(accountId) {
+        const transaction = this.db.transaction(['accounts'], 'readwrite');
+        const store = transaction.objectStore('accounts');
+        
+        return new Promise((resolve, reject) => {
+            const request = store.delete(accountId);
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(request.error);
+        });
     }
 
     // 데이터 백업/복원
