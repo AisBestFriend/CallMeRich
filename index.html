@@ -7,7 +7,7 @@
     <meta name="description" content="하이브리드 가계부 앱 - NoSQL DB 기반 개인 재정 관리">
     
     <!-- Cordova 앱용 CSP 설정 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://cdn.jsdelivr.net 'unsafe-eval' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
     <meta name="format-detection" content="telephone=no">
     <meta name="msapplication-tap-highlight" content="no">
     
@@ -77,8 +77,13 @@
         <!-- 동적 컨텐츠가 여기에 로드됩니다 -->
     </main>
 
-    <!-- Cordova 스크립트 -->
-    <script type="text/javascript" src="cordova.js"></script>
+    <!-- Cordova 스크립트 (하이브리드 앱에서만 로드) -->
+    <script>
+        // Cordova가 사용 가능한 환경인지 확인
+        if (window.cordova || document.URL.indexOf('http://') === -1 && document.URL.indexOf('https://') === -1) {
+            document.write('<script type="text/javascript" src="cordova.js"><\/script>');
+        }
+    </script>
     
     <!-- 차트 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
