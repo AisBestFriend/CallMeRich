@@ -6,14 +6,10 @@
     <meta name="theme-color" content="#2196F3">
     <meta name="description" content="하이브리드 가계부 앱 - NoSQL DB 기반 개인 재정 관리">
     
-    <!-- PWA 매니페스트 -->
-    <link rel="manifest" href="./public/manifest.json">
-    
-    <!-- 모바일 최적화 -->
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="가계부">
+    <!-- Cordova 앱용 CSP 설정 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="msapplication-tap-highlight" content="no">
     
     <!-- 아이콘 -->
     <link rel="icon" type="image/svg+xml" sizes="192x192" href="./public/icon-192x192.svg">
@@ -81,26 +77,22 @@
         <!-- 동적 컨텐츠가 여기에 로드됩니다 -->
     </main>
 
-    <!-- 스크립트 로드 -->
+    <!-- Cordova 스크립트 -->
+    <script type="text/javascript" src="cordova.js"></script>
+    
+    <!-- 차트 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    
+    <!-- 앱 스크립트 -->
     <script src="./src/database.js"></script>
     <script src="./src/app.js"></script>
     
     <script>
-        // 서비스 워커 등록
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(registration => {
-                        console.log('SW registered:', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('SW registration failed:', error);
-                    });
-            });
-        }
-
-        // HTML 로드 완료
+        // Cordova 디바이스 준비 대기
+        document.addEventListener('deviceready', function() {
+            console.log('Cordova is ready');
+            // 앱 초기화는 이미 DOMContentLoaded에서 처리됨
+        }, false);
     </script>
 </body>
 </html>

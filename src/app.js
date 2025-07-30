@@ -122,9 +122,7 @@ class AdvancedBudgetApp {
                 this.showPasswordInput();
             }
             
-            //console.log('6. PWA 설정 시작');
-            // PWA 설정
-            this.setupPWA();
+            //console.log('6. Cordova 앱으로 실행 중');
             
             //console.log('7. 이벤트 리스너 설정 시작');
             // 이벤트 리스너 설정
@@ -334,10 +332,7 @@ class AdvancedBudgetApp {
                     </div>
                     
                     <div class="nav-actions">
-                        <button id="install-btn" class="install-btn" style="display: none;">
-                            <span class="nav-icon">📱</span>
-                            앱 설치
-                        </button>
+                        <!-- Cordova 앱에서는 설치 버튼 불필요 -->
                     </div>
                 </div>
             </nav>
@@ -2578,51 +2573,6 @@ class AdvancedBudgetApp {
         return `${currencyInfo.symbol}${amount.toLocaleString()}`;
     }
 
-    // PWA 설정
-    setupPWA() {
-        // PWA 설치 버튼 클릭 이벤트
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            this.deferredPrompt = e;
-            this.showInstallButton();
-        });
-
-        document.addEventListener('click', (e) => {
-            if (e.target.matches('#install-btn')) {
-                if (this.deferredPrompt) {
-                    this.deferredPrompt.prompt();
-                    this.deferredPrompt.userChoice.then((choiceResult) => {
-                        if (choiceResult.outcome === 'accepted') {
-                            //console.log('사용자가 PWA 설치를 승인했습니다');
-                        }
-                        this.deferredPrompt = null;
-                        this.hideInstallButton();
-                    });
-                }
-            }
-        });
-
-        // 이미 설치된 경우 버튼 숨기기
-        window.addEventListener('appinstalled', () => {
-            this.hideInstallButton();
-        });
-    }
-
-    // PWA 설치 버튼 표시
-    showInstallButton() {
-        const installBtn = document.getElementById('install-btn');
-        if (installBtn) {
-            installBtn.style.display = 'block';
-        }
-    }
-
-    // PWA 설치 버튼 숨기기
-    hideInstallButton() {
-        const installBtn = document.getElementById('install-btn');
-        if (installBtn) {
-            installBtn.style.display = 'none';
-        }
-    }
 
     // 토스트 메시지 표시
     showToast(message, type = 'success') {

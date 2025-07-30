@@ -1,0 +1,73 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.callmerich.budgetapp" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Call Me Rich</name>
+    <description>
+        개인 맞춤형 가계부 앱 - NoSQL DB 기반 재정 관리 솔루션
+    </description>
+    <author email="noreply@callmerich.com" href="https://callmerich.com">
+        Call Me Rich Team
+    </author>
+    
+    <!-- 시작 페이지 -->
+    <content src="index.html" />
+    
+    <!-- 접근 권한 -->
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-intent href="tel:*" />
+    <allow-intent href="sms:*" />
+    <allow-intent href="mailto:*" />
+    <allow-intent href="geo:*" />
+    
+    <!-- 플랫폼별 설정 -->
+    <platform name="android">
+        <allow-intent href="market:*" />
+        <!-- 아이콘 설정 -->
+        <icon density="ldpi" src="public/icon-192x192.svg" />
+        <icon density="mdpi" src="public/icon-192x192.svg" />
+        <icon density="hdpi" src="public/icon-192x192.svg" />
+        <icon density="xhdpi" src="public/icon-192x192.svg" />
+        <icon density="xxhdpi" src="public/icon-512x512.svg" />
+        <icon density="xxxhdpi" src="public/icon-512x512.svg" />
+        
+        <!-- 스플래시 화면 -->
+        <splash density="port-ldpi" src="public/icon-192x192.svg" />
+        <splash density="port-mdpi" src="public/icon-192x192.svg" />
+        <splash density="port-hdpi" src="public/icon-512x512.svg" />
+        <splash density="port-xhdpi" src="public/icon-512x512.svg" />
+        <splash density="port-xxhdpi" src="public/icon-512x512.svg" />
+        <splash density="port-xxxhdpi" src="public/icon-512x512.svg" />
+    </platform>
+    
+    <platform name="ios">
+        <allow-intent href="itms:*" />
+        <allow-intent href="itms-apps:*" />
+        <!-- iOS 아이콘 설정 -->
+        <icon height="57" src="public/icon-192x192.svg" width="57" />
+        <icon height="114" src="public/icon-192x192.svg" width="114" />
+        <icon height="72" src="public/icon-192x192.svg" width="72" />
+        <icon height="144" src="public/icon-192x192.svg" width="144" />
+        <icon height="60" src="public/icon-192x192.svg" width="60" />
+        <icon height="120" src="public/icon-192x192.svg" width="120" />
+        <icon height="76" src="public/icon-192x192.svg" width="76" />
+        <icon height="152" src="public/icon-192x192.svg" width="152" />
+        <icon height="180" src="public/icon-512x512.svg" width="180" />
+    </platform>
+    
+    <!-- 환경설정 -->
+    <preference name="DisallowOverscroll" value="true" />
+    <preference name="android-minSdkVersion" value="24" />
+    <preference name="android-targetSdkVersion" value="33" />
+    <preference name="BackupWebStorage" value="local" />
+    <preference name="SplashMaintainAspectRatio" value="true" />
+    <preference name="SplashShowOnlyFirstTime" value="false" />
+    <preference name="SplashScreen" value="screen" />
+    <preference name="SplashScreenDelay" value="3000" />
+    
+    <!-- 플러그인 -->
+    <plugin name="cordova-plugin-whitelist" spec="1" />
+    <plugin name="cordova-plugin-device" spec="2.0.2" />
+    <plugin name="cordova-plugin-splashscreen" spec="5.0.2" />
+    <plugin name="cordova-plugin-file" spec="6.0.2" />
+</widget>

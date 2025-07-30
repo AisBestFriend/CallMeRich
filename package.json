@@ -8,7 +8,12 @@
     "start": "npm run serve",
     "serve": "python -m http.server 8000 || npx http-server -p 8000",
     "dev": "npm run serve",
-    "build": "echo 'No build step required for vanilla JS project'",
+    "build": "cordova build",
+    "build-android": "cordova build android",
+    "build-ios": "cordova build ios",
+    "run-android": "cordova run android",
+    "run-ios": "cordova run ios",
+    "cordova-serve": "cordova serve",
     "test": "echo 'Tests coming soon...'",
     "lint": "echo 'Linting coming soon...'",
     "deploy": "echo 'Ready for deployment - all files are static'"
@@ -48,12 +53,22 @@
     "not ie <= 11"
   ],
   "devDependencies": {
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "cordova": "^12.0.0",
+    "cordova-android": "^12.0.0",
+    "cordova-ios": "^7.0.0"
   },
   "dependencies": {},
-  "pwa": {
-    "name": "하이브리드 가계부 Pro",
-    "short_name": "가계부Pro",
-    "description": "개인 맞춤형 재정 관리 솔루션"
+  "cordova": {
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "plugins": {
+      "cordova-plugin-whitelist": {},
+      "cordova-plugin-device": {},
+      "cordova-plugin-splashscreen": {},
+      "cordova-plugin-file": {}
+    }
   }
 }
