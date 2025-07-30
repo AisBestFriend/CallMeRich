@@ -25,20 +25,7 @@
   "categories": ["finance", "productivity", "business"],
   "lang": "ko",
   "dir": "ltr",
-  "screenshots": [
-    {
-      "src": "./screenshot-mobile.png",
-      "sizes": "640x1136",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "./screenshot-desktop.png", 
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    }
-  ],
+  "screenshots": [],
   "features": [
     "cross-platform",
     "offline-capable",

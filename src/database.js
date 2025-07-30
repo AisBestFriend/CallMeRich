@@ -524,10 +524,10 @@ class DatabaseManager {
     // === 유틸리티 함수 ===
 
     // 데이터 통계 (포함 설정 적용)
-    async getStatistics(userId = null, period = 'month') {
+    async getStatistics(userId = null, period = 'month', filters = {}) {
         userId = userId || this.currentUserId;
-        const transactions = await this.getTransactions(userId);
-        const assets = await this.getAssets(userId);
+        const transactions = await this.getTransactions(userId, filters);
+        const assets = await this.getAssets(userId, filters);
         
         // 사용자 설정에서 포함 설정 가져오기
         const user = await this.getUser(userId);
@@ -1029,6 +1029,16 @@ class DatabaseManager {
         });
     }
 
+    // 복호화된 데이터로부터 백업 가져오기
+    async uploadBackupFromData(jsonData, options = {}) {
+        try {
+            const result = await this.importUserData(jsonData, options);
+            return result;
+        } catch (error) {
+            throw new Error(`데이터 처리 실패: ${error.message}`);
+        }
+    }
+
     // 전체 데이터베이스 초기화 (개발/테스트용)
     async clearAllData() {
         const stores = ['users', 'transactions', 'assets', 'accounts', 'budgets'];
@@ -1246,6 +1256,156 @@ class DatabaseManager {
             console.error('데이터 마이그레이션 실패:', error);
             throw error;
         }
+    }
+
+    // === 마이그레이션용 함수들 ===
+    
+    // 모든 거래내역 가져오기 (마이그레이션용)
+    async getAllTransactions() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['transactions'], 'readonly');
+            const store = transaction.objectStore('transactions');
+            const request = store.getAll();
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // 모든 자산 가져오기 (마이그레이션용)
+    async getAllAssets() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['assets'], 'readonly');
+            const store = transaction.objectStore('assets');
+            const request = store.getAll();
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // 모든 계정 가져오기 (마이그레이션용)
+    async getAllAccounts() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['accounts'], 'readonly');
+            const store = transaction.objectStore('accounts');
+            const request = store.getAll();
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // 모든 예산 가져오기 (마이그레이션용)
+    async getAllBudgets() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['budgets'], 'readonly');
+            const store = transaction.objectStore('budgets');
+            const request = store.getAll();
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // 마이그레이션용 거래 업데이트 (권한 검사 없음)
+    async updateTransactionForMigration(id, updateData) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['transactions'], 'readwrite');
+            const store = transaction.objectStore('transactions');
+            
+            const getRequest = store.get(id);
+            getRequest.onsuccess = () => {
+                const txn = getRequest.result;
+                if (txn) {
+                    Object.assign(txn, updateData, { 
+                        updatedAt: new Date().toISOString() 
+                    });
+                    
+                    const putRequest = store.put(txn);
+                    putRequest.onsuccess = () => resolve(txn);
+                    putRequest.onerror = () => reject(putRequest.error);
+                } else {
+                    reject(new Error('거래를 찾을 수 없습니다.'));
+                }
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+    }
+
+    // 마이그레이션용 자산 업데이트 (권한 검사 없음)
+    async updateAssetForMigration(id, updateData) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['assets'], 'readwrite');
+            const store = transaction.objectStore('assets');
+            
+            const getRequest = store.get(id);
+            getRequest.onsuccess = () => {
+                const asset = getRequest.result;
+                if (asset) {
+                    Object.assign(asset, updateData, { 
+                        updatedAt: new Date().toISOString() 
+                    });
+                    
+                    const putRequest = store.put(asset);
+                    putRequest.onsuccess = () => resolve(asset);
+                    putRequest.onerror = () => reject(putRequest.error);
+                } else {
+                    reject(new Error('자산을 찾을 수 없습니다.'));
+                }
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+    }
+
+    // 마이그레이션용 계정 업데이트 (권한 검사 없음)
+    async updateAccountForMigration(id, updateData) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['accounts'], 'readwrite');
+            const store = transaction.objectStore('accounts');
+            
+            const getRequest = store.get(id);
+            getRequest.onsuccess = () => {
+                const account = getRequest.result;
+                if (account) {
+                    Object.assign(account, updateData, { 
+                        updatedAt: new Date().toISOString() 
+                    });
+                    
+                    const putRequest = store.put(account);
+                    putRequest.onsuccess = () => resolve(account);
+                    putRequest.onerror = () => reject(putRequest.error);
+                } else {
+                    reject(new Error('계정을 찾을 수 없습니다.'));
+                }
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+    }
+
+    // 마이그레이션용 예산 업데이트 (권한 검사 없음)
+    async updateBudgetForMigration(id, updateData) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['budgets'], 'readwrite');
+            const store = transaction.objectStore('budgets');
+            
+            const getRequest = store.get(id);
+            getRequest.onsuccess = () => {
+                const budget = getRequest.result;
+                if (budget) {
+                    Object.assign(budget, updateData, { 
+                        updatedAt: new Date().toISOString() 
+                    });
+                    
+                    const putRequest = store.put(budget);
+                    putRequest.onsuccess = () => resolve(budget);
+                    putRequest.onerror = () => reject(putRequest.error);
+                } else {
+                    reject(new Error('예산을 찾을 수 없습니다.'));
+                }
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        });
     }
 }
 

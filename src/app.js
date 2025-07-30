@@ -4,7 +4,7 @@ class AdvancedBudgetApp {
         this.dbManager = null;
         this.currentUser = null;
         this.currentView = 'dashboard';
-        this.selectedAccountUserId = null; // 현재 선택된 가계부 사용자 ID
+        this.selectedAccountUserId = 'all'; // 현재 선택된 가계부 사용자 ID ('all'은 전체 보기)
         this.deferredPrompt = null;
         
         // 거래 카테고리 정의
@@ -112,23 +112,14 @@ class AdvancedBudgetApp {
             await this.dbManager.init();
             //console.log('2. 데이터베이스 초기화 완료');
             
-            // 현재 사용자 확인
-            const currentUserId = this.dbManager.getCurrentUser();
-            //console.log('3. 현재 사용자 ID:', currentUserId);
-            
-            if (currentUserId) {
-                this.currentUser = await this.dbManager.getUser(currentUserId);
-                //console.log('4. 사용자 데이터:', this.currentUser);
-                if (this.currentUser) {
-                    //console.log('5. 메인 앱 표시');
-                    this.showMainApp();
-                } else {
-                    //console.log('5. 사용자 데이터 없음 - 인증 폼 표시');
-                    this.showAuthForm();
-                }
+            // 앱 암호 확인
+            const savedPassword = localStorage.getItem('app-password');
+            if (!savedPassword) {
+                // 첫 실행 - 암호 설정
+                this.showPasswordSetup();
             } else {
-                //console.log('4. 사용자 ID 없음 - 인증 폼 표시');
-                this.showAuthForm();
+                // 암호 확인
+                this.showPasswordInput();
             }
             
             //console.log('6. PWA 설정 시작');
@@ -162,12 +153,9 @@ class AdvancedBudgetApp {
         }
     }
 
-    // 인증 폼 표시
-    showAuthForm() {
-        //console.log('showAuthForm 호출됨');
+    // 첫 실행 시 암호 설정
+    showPasswordSetup() {
         const app = document.getElementById('app');
-        //console.log('app 엘리먼트:', app);
-        
         if (!app) {
             console.error('app 엘리먼트를 찾을 수 없습니다!');
             return;
@@ -177,70 +165,134 @@ class AdvancedBudgetApp {
             <div class="auth-container">
                 <div class="auth-card">
                     <div class="auth-header">
-                        <h1>💰 하이브리드 가계부 Pro</h1>
-                        <p>개인 맞춤형 재정 관리 솔루션</p>
+                        <h1>💰 Call Me Rich</h1>
+                        <p>개인 가계부 앱 첫 실행 설정</p>
                     </div>
                     
-                    <div class="auth-tabs">
-                        <button class="auth-tab active" data-tab="login">로그인</button>
-                        <button class="auth-tab" data-tab="register">회원가입</button>
-                    </div>
-                    
-                    <!-- 로그인 폼 -->
-                    <form id="login-form" class="auth-form">
+                    <form id="password-setup-form" class="auth-form">
                         <div class="form-group">
-                            <label>이메일</label>
-                            <input type="email" id="login-email" required>
+                            <label>앱 접근 암호 설정 (4-6자리)</label>
+                            <input type="password" id="setup-password" required minlength="4" maxlength="6" placeholder="0000" value="0000">
+                            <small class="help-text">숫자 4-6자리로 설정하세요 (기본값: 0000)</small>
                         </div>
                         <div class="form-group">
-                            <label>비밀번호</label>
-                            <input type="password" id="login-password" required minlength="6" placeholder="최소 6자 이상">
+                            <label>암호 확인</label>
+                            <input type="password" id="setup-password-confirm" required minlength="4" maxlength="6" placeholder="0000">
                         </div>
-                        <button type="submit" class="btn-primary">로그인</button>
-                    </form>
-                    
-                    <!-- 회원가입 폼 -->
-                    <form id="register-form" class="auth-form" style="display: none;">
-                        <div class="form-group">
-                            <label>사용자명</label>
-                            <input type="text" id="register-username" required>
-                        </div>
-                        <div class="form-group">
-                            <label>이메일</label>
-                            <input type="email" id="register-email" required>
-                        </div>
-                        <div class="form-group">
-                            <label>비밀번호</label>
-                            <input type="password" id="register-password" required minlength="6" placeholder="최소 6자 이상">
-                        </div>
-                        <div class="form-group">
-                            <label>비밀번호 확인</label>
-                            <input type="password" id="register-password-confirm" required minlength="6" placeholder="비밀번호를 다시 입력하세요">
-                        </div>
-                        <div class="form-group">
-                            <label>표시명</label>
-                            <input type="text" id="register-displayname" required>
-                        </div>
-                        <div class="form-group">
-                            <label>기본 통화</label>
-                            <select id="register-currency">
-                                ${Object.entries(this.currencies).map(([code, curr]) => 
-                                    `<option value="${code}">${curr.symbol} ${curr.name}</option>`
-                                ).join('')}
-                            </select>
-                        </div>
-                        <button type="submit" class="btn-primary">회원가입</button>
+                        <button type="submit" class="btn-primary">앱 시작하기</button>
                     </form>
                 </div>
             </div>
         `;
+        
+        // 암호 설정 폼 이벤트 리스너
+        document.getElementById('password-setup-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handlePasswordSetup(e.target);
+        });
+    }
+
+    // 암호 입력 (재실행 시)
+    showPasswordInput() {
+        const app = document.getElementById('app');
+        if (!app) return;
+
+        app.innerHTML = `
+            <div class="auth-container">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <h1>💰 Call Me Rich</h1>
+                        <p>암호를 입력하여 앱에 접근하세요</p>
+                    </div>
+                    
+                    <form id="password-input-form" class="auth-form">
+                        <div class="form-group">
+                            <label>앱 접근 암호</label>
+                            <input type="password" id="input-password" required minlength="4" maxlength="6" placeholder="암호 입력" autofocus>
+                        </div>
+                        <button type="submit" class="btn-primary">앱 열기</button>
+                    </form>
+                </div>
+            </div>
+        `;
+        
+        // 암호 입력 폼 이벤트 리스너
+        document.getElementById('password-input-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handlePasswordInput(e.target);
+        });
+    }
+
+    // 암호 설정 처리
+    async handlePasswordSetup(form) {
+        const password = form.querySelector('#setup-password').value;
+        const passwordConfirm = form.querySelector('#setup-password-confirm').value;
+
+        if (password !== passwordConfirm) {
+            this.showError('암호가 일치하지 않습니다.');
+            return;
+        }
+
+        if (!/^\d{4,6}$/.test(password)) {
+            this.showError('암호는 4-6자리 숫자여야 합니다.');
+            return;
+        }
+
+        try {
+            // 암호 저장
+            localStorage.setItem('app-password', password);
+            
+            // 기본 사용자 생성 (개인 앱이므로 하나만)
+            this.currentUser = {
+                id: 'main-user',
+                name: '나',
+                displayName: '나',
+                defaultCurrency: 'KRW'
+            };
+
+            this.showToast('앱 설정이 완료되었습니다!');
+            await this.showMainApp();
+            
+        } catch (error) {
+            console.error('암호 설정 실패:', error);
+            this.showError('설정 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 암호 입력 처리
+    async handlePasswordInput(form) {
+        const inputPassword = form.querySelector('#input-password').value;
+        const savedPassword = localStorage.getItem('app-password');
+
+        if (inputPassword !== savedPassword) {
+            this.showError('잘못된 암호입니다.');
+            form.querySelector('#input-password').value = '';
+            form.querySelector('#input-password').focus();
+            return;
+        }
+
+        try {
+            // 기본 사용자 설정
+            this.currentUser = {
+                id: 'main-user',
+                name: '나',
+                displayName: '나',
+                defaultCurrency: 'KRW'
+            };
+
+            await this.showMainApp();
+            
+        } catch (error) {
+            console.error('앱 로드 실패:', error);
+            this.showError('앱을 열 수 없습니다.');
+        }
         
         //console.log('인증 폼 HTML 렌더링 완료');
         //console.log('현재 app.innerHTML 길이:', app.innerHTML.length);
     }
 
     // 메인 앱 표시
-    showMainApp() {
+    async showMainApp() {
         //console.log('메인 앱 표시 시작');
         
         // 앱 영역 초기화 - 네비게이션과 메인 컨텐츠가 포함된 전체 구조로 변경
@@ -298,10 +350,110 @@ class AdvancedBudgetApp {
         
         //console.log('메인 앱 HTML 구조 생성 완료');
         
+        // 기존 데이터 마이그레이션 (개인 앱 전환)
+        await this.migrateExistingData();
+        
         // 대시보드로 이동
         this.navigateTo('dashboard');
         
         //console.log('메인 앱 표시 완료');
+    }
+
+    // 기존 데이터 마이그레이션 (개인 앱 전환)
+    async migrateExistingData() {
+        try {
+            // 마이그레이션이 이미 완료되었는지 확인
+            const migrationCompleted = localStorage.getItem('data-migration-completed');
+            if (migrationCompleted === 'true') {
+                return;
+            }
+
+            console.log('기존 데이터 마이그레이션 시작...');
+
+            // 기존 account_users 확인 또는 생성
+            let accountUsers = await this.dbManager.getAllAccountUsers();
+            if (accountUsers.length === 0) {
+                // 기본 사용자 생성
+                const defaultUser = await this.dbManager.addAccountUser({
+                    name: '나',
+                    relationship: '본인'
+                });
+                accountUsers = [defaultUser];
+                console.log('기본 사용자를 생성했습니다.');
+            }
+            
+            const defaultUserId = accountUsers[0].id;
+            console.log('기본 사용자 ID:', defaultUserId);
+
+            // 기존 거래내역 데이터 마이그레이션
+            const transactions = await this.dbManager.getAllTransactions();
+            if (transactions.length > 0) {
+                console.log(`${transactions.length}개의 거래내역을 마이그레이션합니다.`);
+                for (const transaction of transactions) {
+                    const updateData = { ...transaction };
+                    // userId 필드 제거
+                    delete updateData.userId;
+                    // accountUserId가 없으면 기본 사용자로 설정
+                    if (!updateData.accountUserId) {
+                        updateData.accountUserId = defaultUserId;
+                    }
+                    await this.dbManager.updateTransactionForMigration(transaction.id, updateData);
+                }
+            }
+
+            // 기존 자산 데이터 마이그레이션
+            const assets = await this.dbManager.getAllAssets();
+            if (assets.length > 0) {
+                console.log(`${assets.length}개의 자산을 마이그레이션합니다.`);
+                for (const asset of assets) {
+                    const updateData = { ...asset };
+                    // userId 필드 제거
+                    delete updateData.userId;
+                    // accountUserId가 없으면 기본 사용자로 설정
+                    if (!updateData.accountUserId) {
+                        updateData.accountUserId = defaultUserId;
+                    }
+                    await this.dbManager.updateAssetForMigration(asset.id, updateData);
+                }
+            }
+
+            // 기존 계정 데이터 마이그레이션
+            const accounts = await this.dbManager.getAllAccounts();
+            if (accounts.length > 0) {
+                console.log(`${accounts.length}개의 계정을 마이그레이션합니다.`);
+                for (const account of accounts) {
+                    const updateData = { ...account };
+                    // userId 필드 제거 (계정은 공통으로 사용)
+                    delete updateData.userId;
+                    await this.dbManager.updateAccountForMigration(account.id, updateData);
+                }
+            }
+
+            // 기존 예산 데이터 마이그레이션
+            const budgets = await this.dbManager.getAllBudgets();
+            if (budgets.length > 0) {
+                console.log(`${budgets.length}개의 예산을 마이그레이션합니다.`);
+                for (const budget of budgets) {
+                    const updateData = { ...budget };
+                    // userId 필드 제거 (예산은 공통으로 사용)
+                    delete updateData.userId;
+                    await this.dbManager.updateBudgetForMigration(budget.id, updateData);
+                }
+            }
+
+            // 마이그레이션 완료 표시
+            localStorage.setItem('data-migration-completed', 'true');
+            console.log('데이터 마이그레이션 완료');
+
+            // 사용자에게 알림
+            if (transactions.length > 0 || assets.length > 0 || accounts.length > 0 || budgets.length > 0) {
+                this.showToast('기존 데이터를 개인 앱으로 성공적으로 변환했습니다.');
+            }
+
+        } catch (error) {
+            console.error('데이터 마이그레이션 실패:', error);
+            this.showError('기존 데이터 변환 중 오류가 발생했습니다.');
+        }
     }
 
     // 네비게이션 처리
@@ -329,7 +481,7 @@ class AdvancedBudgetApp {
                 mainContent.innerHTML = await this.renderAssets();
                 break;
             case 'reports':
-                mainContent.innerHTML = this.renderReports();
+                mainContent.innerHTML = await this.renderReports();
                 break;
             case 'settings':
                 mainContent.innerHTML = this.renderSettings();
@@ -339,42 +491,11 @@ class AdvancedBudgetApp {
 
     // 대시보드 렌더링
     async renderDashboard() {
-        // 사용자 선택기 생성
-        const userSelector = await this.generateUserSelector();
-        
         const html = `
             <div class="dashboard-container">
                 <div class="dashboard-header">
-                    <h1>대시보드</h1>
-                    <p>안녕하세요, ${this.currentUser.displayName}님!</p>
-                </div>
-                
-                ${userSelector}
-                
-                <div class="dashboard-stats">
-                    <div class="stat-card">
-                        <div class="stat-icon">💰</div>
-                        <div class="stat-info">
-                            <h3>총 자산</h3>
-                            <p class="stat-value" id="total-assets">계산 중...</p>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon">📈</div>
-                        <div class="stat-info">
-                            <h3>이번 달 수입</h3>
-                            <p class="stat-value" id="monthly-income">계산 중...</p>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon">📉</div>
-                        <div class="stat-info">
-                            <h3>이번 달 지출</h3>
-                            <p class="stat-value" id="monthly-expense">계산 중...</p>
-                        </div>
-                    </div>
+                    <h1>재정 현황 대시보드</h1>
+                    <p>전체 가계 재정 상황을 한눈에 확인하세요</p>
                 </div>
                 
                 <div class="dashboard-actions">
@@ -388,70 +509,158 @@ class AdvancedBudgetApp {
                     </button>
                 </div>
                 
-                <div class="recent-transactions">
-                    <h2>최근 거래</h2>
-                    <div class="transactions-list">
-                        로딩 중...
+                <div class="user-summaries" id="user-summaries">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <p>사용자별 요약 로딩 중...</p>
                     </div>
                 </div>
             </div>
         `;
         
         // 렌더링 후 데이터 로드
-        setTimeout(() => this.loadDashboardData(), 100);
+        setTimeout(() => this.loadUserSummaries(), 100);
         
         return html;
     }
 
-    // 대시보드 데이터 로드
-    async loadDashboardData() {
+    // 사용자별 요약 데이터 로드
+    async loadUserSummaries() {
         try {
-            const filters = {};
-            if (this.selectedAccountUserId) {
-                filters.accountUserId = this.selectedAccountUserId;
-            }
+            const users = await this.dbManager.getAllAccountUsers();
+            const summaryContainer = document.getElementById('user-summaries');
             
-            // 최근 거래 로드 (최대 5개)
-            const transactions = await this.dbManager.getTransactions(null, filters);
-            const recentTransactions = transactions.slice(0, 5);
+            if (!summaryContainer) return;
             
-            const transactionsList = document.querySelector('.dashboard-container .transactions-list');
-            if (transactionsList) {
-                transactionsList.innerHTML = await this.renderTransactionsList(recentTransactions);
-            }
-
-            // 통계 데이터 로드 (포함 설정 적용됨)
-            const stats = await this.dbManager.getStatistics(null, 'month');
+            const userSummaries = await Promise.all(
+                users.map(user => this.generateUserSummary(user))
+            );
             
-            // 통계 업데이트
-            const totalAssetsEl = document.getElementById('total-assets');
-            const monthlyIncomeEl = document.getElementById('monthly-income');
-            const monthlyExpenseEl = document.getElementById('monthly-expense');
-            
-            if (totalAssetsEl) {
-                const assetText = this.formatCurrency(stats.totalAssets, this.currentUser.defaultCurrency);
-                const filterInfo = stats.filteredCounts && stats.filteredCounts.includedAssets !== stats.filteredCounts.totalAssets 
-                    ? ` (${stats.filteredCounts.includedAssets}/${stats.filteredCounts.totalAssets} 포함)` 
-                    : '';
-                totalAssetsEl.innerHTML = `${assetText}<small class="filter-info">${filterInfo}</small>`;
-            }
-            if (monthlyIncomeEl) {
-                monthlyIncomeEl.textContent = this.formatCurrency(stats.income, this.currentUser.defaultCurrency);
-            }
-            if (monthlyExpenseEl) {
-                monthlyExpenseEl.textContent = this.formatCurrency(stats.expenses, this.currentUser.defaultCurrency);
-            }
-            
-            // 필터링 정보가 있다면 표시
-            if (stats.filteredCounts && (
-                stats.filteredCounts.includedTransactions !== stats.filteredCounts.totalTransactions ||
-                stats.filteredCounts.includedAssets !== stats.filteredCounts.totalAssets
-            )) {
-                this.showFilterNotification(stats.filteredCounts);
-            }
+            summaryContainer.innerHTML = userSummaries.join('');
             
         } catch (error) {
-            console.error('대시보드 데이터 로드 실패:', error);
+            console.error('사용자 요약 로드 실패:', error);
+            const summaryContainer = document.getElementById('user-summaries');
+            if (summaryContainer) {
+                summaryContainer.innerHTML = '<p class="error-message">데이터를 불러올 수 없습니다.</p>';
+            }
+        }
+    }
+
+    // 개별 사용자 요약 생성
+    async generateUserSummary(user) {
+        try {
+            // 사용자별 데이터 필터 (정확한 필드명 사용)
+            const transactionFilters = { accountUserId: user.id };
+            const assetFilters = { accountUserId: user.id };
+            
+            // 자산 데이터
+            const assets = await this.dbManager.getAssets(null, assetFilters);
+            const totalAssets = assets.reduce((sum, asset) => sum + asset.currentValue, 0);
+            
+            // 이번 달 거래 데이터  
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const transactions = await this.dbManager.getTransactions(null, transactionFilters);
+            
+            const thisMonthTransactions = transactions.filter(t => 
+                t.date.startsWith(currentMonth)
+            );
+            
+            const monthlyIncome = thisMonthTransactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + t.amount, 0);
+                
+            const monthlyExpense = thisMonthTransactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const monthlyBalance = monthlyIncome - monthlyExpense;
+            
+            // 지난 달과 비교를 위한 데이터
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
+            
+            const lastMonthTransactions = transactions.filter(t => 
+                t.date.startsWith(lastMonthStr)
+            );
+            
+            const lastMonthIncome = lastMonthTransactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + t.amount, 0);
+                
+            const lastMonthExpense = lastMonthTransactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            // 증감률 계산
+            const incomeChange = lastMonthIncome > 0 ? 
+                ((monthlyIncome - lastMonthIncome) / lastMonthIncome * 100) : 0;
+            const expenseChange = lastMonthExpense > 0 ? 
+                ((monthlyExpense - lastMonthExpense) / lastMonthExpense * 100) : 0;
+            
+            return `
+                <div class="user-summary-card">
+                    <div class="user-header">
+                        <div class="user-info">
+                            <h3>${user.name}</h3>
+                            <p class="user-relationship">${user.relationship || '가족 구성원'}</p>
+                        </div>
+                        <div class="user-status ${monthlyBalance >= 0 ? 'positive' : 'negative'}">
+                            ${monthlyBalance >= 0 ? '📈' : '📉'}
+                        </div>
+                    </div>
+                    
+                    <div class="financial-overview">
+                        <div class="overview-item assets">
+                            <div class="overview-icon">💰</div>
+                            <div class="overview-data">
+                                <h4>총 자산</h4>
+                                <p class="amount">${this.formatCurrency(totalAssets, this.currentUser.defaultCurrency)}</p>
+                                <span class="asset-count">${assets.length}개 자산</span>
+                            </div>
+                        </div>
+                        
+                        <div class="overview-item transactions">
+                            <div class="overview-icon">💸</div>
+                            <div class="overview-data">
+                                <h4>이번 달 수지</h4>
+                                <div class="transaction-summary">
+                                    <div class="income-expense-row">
+                                        <span class="income-part">
+                                            📈 ${this.formatCurrency(monthlyIncome, this.currentUser.defaultCurrency)}
+                                            <small class="trend ${incomeChange >= 0 ? 'positive' : 'negative'}">
+                                                ${incomeChange >= 0 ? '↗' : '↘'} ${Math.abs(incomeChange).toFixed(1)}%
+                                            </small>
+                                        </span>
+                                        <span class="divider">-</span>
+                                        <span class="expense-part">
+                                            📉 ${this.formatCurrency(monthlyExpense, this.currentUser.defaultCurrency)}
+                                            <small class="trend ${expenseChange <= 0 ? 'positive' : 'negative'}">
+                                                ${expenseChange <= 0 ? '↘' : '↗'} ${Math.abs(expenseChange).toFixed(1)}%
+                                            </small>
+                                        </span>
+                                    </div>
+                                    <div class="balance-result ${monthlyBalance >= 0 ? 'profit' : 'loss'}">
+                                        ${monthlyBalance >= 0 ? '💚' : '❤️'} ${monthlyBalance >= 0 ? '+' : ''}${this.formatCurrency(monthlyBalance, this.currentUser.defaultCurrency)}
+                                        <span class="balance-status">(${monthlyBalance >= 0 ? '흑자' : '적자'})</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            console.error(`사용자 ${user.name} 요약 생성 실패:`, error);
+            return `
+                <div class="user-summary-card error">
+                    <div class="user-header">
+                        <h3>${user.name}</h3>
+                        <p class="error-message">데이터 로드 실패</p>
+                    </div>
+                </div>
+            `;
         }
     }
 
@@ -522,8 +731,8 @@ class AdvancedBudgetApp {
                         <input type="date" id="filter-date-from" placeholder="시작일">
                         <input type="date" id="filter-date-to" placeholder="종료일">
                         
-                        <button onclick="budgetApp.applyFilters()">필터 적용</button>
-                        <button onclick="budgetApp.clearFilters()">초기화</button>
+                        <button class="btn-primary" onclick="budgetApp.applyFilters()">필터 적용</button>
+                        <button class="btn-secondary" onclick="budgetApp.clearFilters()">초기화</button>
                     </div>
                 </div>
                 
@@ -533,10 +742,35 @@ class AdvancedBudgetApp {
             </div>
         `;
         
-        // 렌더링 후 데이터 로드
-        setTimeout(() => this.loadTransactions(), 100);
+        // 렌더링 후 데이터 로드 및 날짜 필터 초기화
+        setTimeout(() => {
+            this.setDefaultDateFilters();
+            this.loadTransactions();
+        }, 100);
         
         return html;
+    }
+
+    // 날짜 필터 기본값 설정 (이번달 1일~말일)
+    setDefaultDateFilters() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        
+        // 이번달 1일
+        const firstDay = new Date(year, month, 1);
+        const firstDayStr = firstDay.toISOString().split('T')[0];
+        
+        // 이번달 마지막날
+        const lastDay = new Date(year, month + 1, 0);
+        const lastDayStr = lastDay.toISOString().split('T')[0];
+        
+        // 날짜 필터 설정
+        const dateFromElement = document.getElementById('filter-date-from');
+        const dateToElement = document.getElementById('filter-date-to');
+        
+        if (dateFromElement) dateFromElement.value = firstDayStr;
+        if (dateToElement) dateToElement.value = lastDayStr;
     }
 
     // 카테고리 옵션 생성
@@ -560,8 +794,21 @@ class AdvancedBudgetApp {
     async loadTransactions() {
         try {
             const filters = {};
-            if (this.selectedAccountUserId) {
+            
+            // 사용자 필터
+            if (this.selectedAccountUserId && this.selectedAccountUserId !== 'all') {
                 filters.accountUserId = this.selectedAccountUserId;
+            }
+            
+            // 날짜 필터 (필터 요소가 존재하는 경우)
+            const dateFromElement = document.getElementById('filter-date-from');
+            const dateToElement = document.getElementById('filter-date-to');
+            
+            if (dateFromElement && dateFromElement.value) {
+                filters.dateFrom = dateFromElement.value;
+            }
+            if (dateToElement && dateToElement.value) {
+                filters.dateTo = dateToElement.value;
             }
             
             const transactions = await this.dbManager.getTransactions(null, filters);
@@ -608,7 +855,7 @@ class AdvancedBudgetApp {
             const userInfo = user ? `${user.name}${user.relationship ? ` (${user.relationship})` : ''}` : '미지정';
             
             return `
-                <div class="transaction-item">
+                <div class="transaction-item" style="cursor: pointer;">
                     <div class="transaction-icon">${categoryIcon}</div>
                     <div class="transaction-info">
                         <h4>${transaction.description}</h4>
@@ -621,8 +868,8 @@ class AdvancedBudgetApp {
                         ${formattedAmount}
                     </div>
                     <div class="transaction-actions">
-                        <button class="btn-icon" onclick="budgetApp.showEditTransactionModal('${transaction.id}')" title="수정">✏️</button>
-                        <button class="btn-icon btn-danger" onclick="budgetApp.deleteTransaction('${transaction.id}')" title="삭제">🗑️</button>
+                        <button class="btn-icon btn-edit" onclick="event.stopPropagation(); budgetApp.showEditTransactionModal('${transaction.id}')" title="수정">✏️</button>
+                        <button class="btn-icon btn-danger" onclick="event.stopPropagation(); budgetApp.deleteTransaction('${transaction.id}')" title="삭제">🗑️</button>
                     </div>
                 </div>
             `;
@@ -672,7 +919,7 @@ class AdvancedBudgetApp {
             //console.log('자산 목록 로딩 시작');
             
             const filters = {};
-            if (this.selectedAccountUserId) {
+            if (this.selectedAccountUserId && this.selectedAccountUserId !== 'all') {
                 filters.accountUserId = this.selectedAccountUserId;
             }
             
@@ -800,11 +1047,29 @@ class AdvancedBudgetApp {
     }
 
     // 리포트 렌더링
-    renderReports() {
+    async renderReports() {
+        // 사용자 목록 가져오기
+        const users = await this.dbManager.getAllAccountUsers();
+        const userOptions = users.map(user => 
+            `<option value="${user.id}" ${user.id === this.currentUser.id ? 'selected' : ''}>
+                ${user.name}${user.relationship ? ` (${user.relationship})` : ''}
+            </option>`
+        ).join('');
+
         const html = `
             <div class="reports-container">
                 <div class="section-header">
                     <h1>리포트</h1>
+                </div>
+                
+                <div class="report-filters">
+                    <div class="filter-group">
+                        <label>👤 사용자별 보기:</label>
+                        <select id="report-user-filter" onchange="budgetApp.updateReportUser()">
+                            <option value="all">전체 사용자</option>
+                            ${userOptions}
+                        </select>
+                    </div>
                 </div>
                 
                 <div class="report-navigation">
@@ -886,7 +1151,14 @@ class AdvancedBudgetApp {
 
     // 월별 리포트 렌더링
     async renderMonthlyReport() {
-        const transactions = await this.dbManager.getTransactions();
+        const selectedUserId = document.getElementById('report-user-filter')?.value;
+        let filters = {};
+        
+        if (selectedUserId && selectedUserId !== 'all') {
+            filters.userId = selectedUserId;
+        }
+        
+        const transactions = await this.dbManager.getTransactions(null, filters);
         const monthlyData = this.processMonthlyData(transactions);
         
         return `
@@ -1129,7 +1401,14 @@ class AdvancedBudgetApp {
         const period = parseInt(document.getElementById('chart-period')?.value) || 12;
         const showGrowthRates = document.getElementById('show-growth-rates')?.checked !== false;
         
-        this.dbManager.getTransactions().then(transactions => {
+        const selectedUserId = document.getElementById('report-user-filter')?.value;
+        let filters = {};
+        
+        if (selectedUserId && selectedUserId !== 'all') {
+            filters.userId = selectedUserId;
+        }
+        
+        this.dbManager.getTransactions(null, filters).then(transactions => {
             const monthlyData = this.processMonthlyData(transactions, period);
             const chartData = monthlyData.chartData;
 
@@ -1349,6 +1628,16 @@ class AdvancedBudgetApp {
         this.createMonthlyChart();
     }
 
+    // 리포트 사용자 필터 업데이트
+    updateReportUser() {
+        // 현재 활성화된 리포트 탭 찾기
+        const activeTab = document.querySelector('.report-tab.active');
+        if (activeTab) {
+            const reportType = activeTab.dataset.report;
+            this.showReport(reportType);
+        }
+    }
+
     // 설정 렌더링
     renderSettings() {
         const html = `
@@ -1359,18 +1648,18 @@ class AdvancedBudgetApp {
                 
                 <div class="settings-sections">
                     <div class="settings-section">
-                        <h2>계정 정보</h2>
+                        <h2>🔐 보안 설정</h2>
                         <div class="setting-item">
-                            <label>사용자명:</label>
-                            <span>${this.currentUser.username}</span>
+                            <label>앱 접근 암호:</label>
+                            <button class="btn-secondary" onclick="budgetApp.showChangePasswordModal()">암호 변경</button>
                         </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h2>👤 앱 정보</h2>
                         <div class="setting-item">
-                            <label>이메일:</label>
-                            <span>${this.currentUser.email}</span>
-                        </div>
-                        <div class="setting-item">
-                            <label>표시명:</label>
-                            <span>${this.currentUser.displayName}</span>
+                            <label>기본 통화:</label>
+                            <span>${this.currencies[this.currentUser.defaultCurrency]?.name || 'KRW'}</span>
                         </div>
                     </div>
 
@@ -1493,7 +1782,7 @@ class AdvancedBudgetApp {
             if (user) {
                 this.currentUser = user;
                 this.dbManager.setCurrentUser(user.id);
-                this.showMainApp();
+                await this.showMainApp();
                 this.showToast('로그인되었습니다!');
             } else {
                 this.showError('사용자를 찾을 수 없습니다.');
@@ -1520,7 +1809,7 @@ class AdvancedBudgetApp {
             // 기본 계좌 생성
             await this.createDefaultAccount();
             
-            this.showMainApp();
+            await this.showMainApp();
             this.showToast('회원가입이 완료되었습니다!');
         } catch (error) {
             this.showError('회원가입 중 오류가 발생했습니다.');
@@ -1555,189 +1844,6 @@ class AdvancedBudgetApp {
     }
 
     // 모달 및 기타 유틸리티 메서드들
-    async showEditTransactionModal(transactionId) {
-        try {
-            const transaction = await this.dbManager.getTransaction(transactionId);
-            if (!transaction) {
-                this.showError('거래 내역을 찾을 수 없습니다.');
-                return;
-            }
-            
-            // 카테고리 옵션 생성
-            const incomeOptions = Object.entries(this.transactionCategories.income)
-                .map(([key, cat]) => `<option value="${key}" ${transaction.type === 'income' && transaction.category === key ? 'selected' : ''}>${cat.icon} ${cat.name}</option>`)
-                .join('');
-                
-            const expenseOptions = Object.entries(this.transactionCategories.expense)
-                .map(([key, cat]) => `<option value="${key}" ${transaction.type === 'expense' && transaction.category === key ? 'selected' : ''}>${cat.icon} ${cat.name}</option>`)
-                .join('');
-                
-            // 통화 옵션 생성
-            const currencyOptions = Object.entries(this.currencies)
-                .map(([code, curr]) => `<option value="${code}" ${transaction.currency === code ? 'selected' : ''}>${curr.symbol} ${curr.name}</option>`)
-                .join('');
-            
-            const modalHtml = `
-                <div class="modal-overlay" id="edit-transaction-modal">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h2>✏️ 거래 수정</h2>
-                            <button class="modal-close" onclick="budgetApp.closeEditTransactionModal()">&times;</button>
-                        </div>
-                        
-                        <form id="edit-transaction-form" class="modal-form">
-                            <input type="hidden" id="transaction-id" value="${transactionId}">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>거래 유형 *</label>
-                                    <select id="edit-transaction-type" required onchange="budgetApp.updateEditTransactionCategories()">
-                                        <option value="">거래 유형 선택</option>
-                                        <option value="income" ${transaction.type === 'income' ? 'selected' : ''}>💰 수입</option>
-                                        <option value="expense" ${transaction.type === 'expense' ? 'selected' : ''}>💸 지출</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>카테고리 *</label>
-                                    <select id="edit-transaction-category" required>
-                                        <option value="">카테고리 선택</option>
-                                        <optgroup label="💰 수입" style="display: ${transaction.type === 'income' ? 'block' : 'none'}">
-                                            ${incomeOptions}
-                                        </optgroup>
-                                        <optgroup label="💸 지출" style="display: ${transaction.type === 'expense' ? 'block' : 'none'}">
-                                            ${expenseOptions}
-                                        </optgroup>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>거래일 *</label>
-                                    <input type="date" id="edit-transaction-date" required value="${transaction.date}">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>금액 *</label>
-                                    <input type="number" id="edit-transaction-amount" required min="0" step="0.01" placeholder="0.00" value="${Math.abs(transaction.amount)}">
-                                </div>
-                            </div>
-                            
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>통화</label>
-                                    <select id="edit-transaction-currency">
-                                        ${currencyOptions}
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>설명 *</label>
-                                    <input type="text" id="edit-transaction-description" required placeholder="거래 설명" value="${transaction.description}">
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>메모</label>
-                                <textarea id="edit-transaction-notes" placeholder="추가 메모 (선택사항)" rows="3">${transaction.notes || ''}</textarea>
-                            </div>
-                            
-                            <div class="form-actions">
-                                <button type="button" class="btn-secondary" onclick="budgetApp.closeEditTransactionModal()">취소</button>
-                                <button type="submit" class="btn-primary">수정 완료</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-            
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-            
-            // 폼 제출 이벤트 리스너
-            document.getElementById('edit-transaction-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.updateTransaction(transactionId);
-            });
-            
-        } catch (error) {
-            console.error('거래 수정 모달 표시 실패:', error);
-            this.showError('거래 수정 모달을 열 수 없습니다.');
-        }
-    }
-
-    closeEditTransactionModal() {
-        const modal = document.getElementById('edit-transaction-modal');
-        if (modal) {
-            modal.remove();
-        }
-    }
-
-    updateEditTransactionCategories() {
-        const typeSelect = document.getElementById('edit-transaction-type');
-        const categorySelect = document.getElementById('edit-transaction-category');
-        const selectedType = typeSelect.value;
-        
-        // 모든 optgroup 숨기기
-        const optgroups = categorySelect.querySelectorAll('optgroup');
-        optgroups.forEach(group => {
-            group.style.display = 'none';
-        });
-        
-        // 선택된 타입에 해당하는 optgroup 보이기
-        if (selectedType) {
-            const targetGroup = categorySelect.querySelector(`optgroup[label*="${selectedType === 'income' ? '수입' : '지출'}"]`);
-            if (targetGroup) {
-                targetGroup.style.display = 'block';
-            }
-        }
-        
-        // 카테고리 선택 초기화
-        categorySelect.value = '';
-    }
-
-    async updateTransaction(transactionId) {
-        try {
-            const formData = {
-                type: document.getElementById('edit-transaction-type').value,
-                category: document.getElementById('edit-transaction-category').value,
-                date: document.getElementById('edit-transaction-date').value,
-                amount: parseFloat(document.getElementById('edit-transaction-amount').value),
-                currency: document.getElementById('edit-transaction-currency').value,
-                description: document.getElementById('edit-transaction-description').value,
-                notes: document.getElementById('edit-transaction-notes').value
-            };
-
-            // 유효성 검사
-            if (!formData.type || !formData.category || !formData.date || !formData.amount || !formData.description) {
-                this.showError('필수 항목을 모두 입력해주세요.');
-                return;
-            }
-
-            if (formData.amount <= 0) {
-                this.showError('금액은 0보다 커야 합니다.');
-                return;
-            }
-
-            await this.dbManager.updateTransaction(transactionId, formData);
-            
-            this.closeEditTransactionModal();
-            this.showToast('✅ 거래가 성공적으로 수정되었습니다!');
-            
-            // 현재 거래내역 페이지나 대시보드라면 새로고침
-            if (this.currentView === 'transactions' || this.currentView === 'dashboard') {
-                this.navigateTo(this.currentView);
-            }
-            
-        } catch (error) {
-            console.error('거래 수정 실패:', error);
-            this.showError('거래 수정에 실패했습니다: ' + error.message);
-        }
-    }
-
-    showAddTransactionModal() {
-        // 거래 추가 모달 구현
-        this.showToast('거래 추가 기능은 구현 예정입니다.');
-    }
 
     async showAddAssetModal() {
         //console.log('자산 추가 모달 표시');
@@ -1799,12 +1905,12 @@ class AdvancedBudgetApp {
                         <div class="form-row">
                             <div class="form-group">
                                 <label>현재 가치 *</label>
-                                <input type="number" id="asset-current-value" required step="0.01" placeholder="0.00">
+                                <input type="text" id="asset-current-value" required placeholder="0" oninput="budgetApp.formatAmountInput(this)">
                             </div>
                             
                             <div class="form-group">
                                 <label>구매 가격</label>
-                                <input type="number" id="asset-purchase-price" step="0.01" placeholder="0.00">
+                                <input type="text" id="asset-purchase-price" placeholder="0" oninput="budgetApp.formatAmountInput(this)">
                             </div>
                         </div>
                         
@@ -1897,8 +2003,8 @@ class AdvancedBudgetApp {
             name: form.querySelector('#asset-name').value,
             type: form.querySelector('#asset-type').value,
             subType: form.querySelector('#asset-subtype').value,
-            currentValue: parseFloat(form.querySelector('#asset-current-value').value),
-            purchasePrice: parseFloat(form.querySelector('#asset-purchase-price').value) || 0,
+            currentValue: parseFloat(form.querySelector('#asset-current-value').value.replace(/,/g, '')),
+            purchasePrice: parseFloat(form.querySelector('#asset-purchase-price').value.replace(/,/g, '')) || 0,
             currency: form.querySelector('#asset-currency').value,
             quantity: parseFloat(form.querySelector('#asset-quantity').value) || 1,
             unit: form.querySelector('#asset-unit').value,
@@ -1998,12 +2104,12 @@ class AdvancedBudgetApp {
                             <div class="form-row">
                                 <div class="form-group">
                                     <label>현재 가치 *</label>
-                                    <input type="number" id="asset-current-value" required step="0.01" value="${asset.currentValue}">
+                                    <input type="text" id="asset-current-value" required value="${parseInt(asset.currentValue).toLocaleString('ko-KR')}" oninput="budgetApp.formatAmountInput(this)">
                                 </div>
                                 
                                 <div class="form-group">
                                     <label>구매 가격</label>
-                                    <input type="number" id="asset-purchase-price" step="0.01" value="${asset.purchasePrice || ''}">
+                                    <input type="text" id="asset-purchase-price" value="${asset.purchasePrice ? parseInt(asset.purchasePrice).toLocaleString('ko-KR') : ''}" oninput="budgetApp.formatAmountInput(this)">
                                 </div>
                             </div>
                             
@@ -2078,8 +2184,8 @@ class AdvancedBudgetApp {
             name: form.querySelector('#asset-name').value,
             type: form.querySelector('#asset-type').value,
             subType: form.querySelector('#asset-subtype').value,
-            currentValue: parseFloat(form.querySelector('#asset-current-value').value),
-            purchasePrice: parseFloat(form.querySelector('#asset-purchase-price').value) || 0,
+            currentValue: parseFloat(form.querySelector('#asset-current-value').value.replace(/,/g, '')),
+            purchasePrice: parseFloat(form.querySelector('#asset-purchase-price').value.replace(/,/g, '')) || 0,
             currency: form.querySelector('#asset-currency').value,
             quantity: parseFloat(form.querySelector('#asset-quantity').value) || 1,
             unit: form.querySelector('#asset-unit').value,
@@ -2132,16 +2238,35 @@ class AdvancedBudgetApp {
     }
 
     async exportData() {
-        try {
-            this.showToast('데이터를 내보내는 중...');
-            
-            await this.dbManager.downloadBackup();
-            
-            this.showToast('✅ 데이터가 성공적으로 내보내졌습니다!');
-        } catch (error) {
-            console.error('데이터 내보내기 실패:', error);
-            this.showError('데이터 내보내기 실패: ' + error.message);
-        }
+        this.showPasswordInputModal('데이터 내보내기', async (password) => {
+            try {
+                this.showToast('데이터를 암호화하여 내보내는 중...');
+                
+                // 모든 데이터 가져오기
+                const data = await this.dbManager.exportUserData();
+                
+                // 데이터 암호화
+                const encryptedPackage = await this.encryptData(data, password);
+                
+                // 암호화된 데이터를 파일로 다운로드
+                const dataStr = JSON.stringify(encryptedPackage, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `budget_backup_encrypted_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                this.showToast('✅ 암호화된 데이터가 성공적으로 내보내졌습니다!');
+            } catch (error) {
+                console.error('데이터 내보내기 실패:', error);
+                this.showError('데이터 내보내기 실패: ' + error.message);
+            }
+        });
     }
 
     importData() {
@@ -2155,11 +2280,33 @@ class AdvancedBudgetApp {
             if (!file) return;
             
             try {
-                // 가져오기 옵션 모달 표시
-                this.showImportOptionsModal(file);
+                const text = await file.text();
+                const fileData = JSON.parse(text);
+                
+                // 암호화된 파일인지 확인
+                if (fileData.encryptedData && fileData.salt && fileData.iv && fileData.algorithm) {
+                    // 암호화된 파일 - 암호 입력 요청
+                    this.showPasswordInputModal('데이터 가져오기', async (password) => {
+                        try {
+                            this.showToast('데이터를 복호화하여 가져오는 중...');
+                            
+                            // 데이터 복호화
+                            const decryptedData = await this.decryptData(fileData, password);
+                            
+                            // 복호화된 데이터로 가져오기 옵션 모달 표시
+                            this.showImportOptionsModal(null, decryptedData);
+                        } catch (error) {
+                            console.error('복호화 실패:', error);
+                            this.showError(error.message);
+                        }
+                    });
+                } else {
+                    // 일반 백업 파일 - 기존 로직 사용
+                    this.showImportOptionsModal(file, fileData);
+                }
             } catch (error) {
-                console.error('파일 선택 오류:', error);
-                this.showError('파일을 읽을 수 없습니다.');
+                console.error('파일 읽기 오류:', error);
+                this.showError('파일을 읽을 수 없습니다. 올바른 백업 파일인지 확인해주세요.');
             }
         };
         
@@ -2168,7 +2315,7 @@ class AdvancedBudgetApp {
         document.body.removeChild(fileInput);
     }
 
-    showImportOptionsModal(file) {
+    showImportOptionsModal(file, preloadedData = null) {
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.innerHTML = `
@@ -2240,6 +2387,7 @@ class AdvancedBudgetApp {
         `;
         
         modal.file = file; // 파일 정보를 모달에 저장
+        modal.preloadedData = preloadedData; // 복호화된 데이터를 모달에 저장
         document.body.appendChild(modal);
         
         // 가져오기 방식 변경 이벤트 리스너 추가
@@ -2267,6 +2415,7 @@ class AdvancedBudgetApp {
     async executeImport(button) {
         const modal = button.closest('.modal-overlay');
         const file = modal.file;
+        const preloadedData = modal.preloadedData;
         
         const importMode = document.querySelector('input[name="import-mode"]:checked').value;
         const mergeStrategy = importMode === 'add' ? 
@@ -2285,7 +2434,9 @@ class AdvancedBudgetApp {
             this.showToast('데이터를 가져오는 중...');
             modal.remove();
             
-            const result = await this.dbManager.uploadBackup(file, options);
+            const result = preloadedData ? 
+                await this.dbManager.uploadBackupFromData(preloadedData, options) :
+                await this.dbManager.uploadBackup(file, options);
             
             if (result.success) {
                 let message = '✅ 데이터 가져오기 완료!\n\n';
@@ -2372,47 +2523,48 @@ class AdvancedBudgetApp {
             dateTo: document.getElementById('filter-date-to')?.value || ''
         };
 
+        // 사용자 필터 추가
+        if (this.selectedAccountUserId && this.selectedAccountUserId !== 'all') {
+            filters.accountUserId = this.selectedAccountUserId;
+        }
+
         try {
+            this.showToast('필터를 적용하는 중...', 'info');
             const transactions = await this.dbManager.getTransactions(null, filters);
             const transactionsList = document.querySelector('.transactions-list');
             if (transactionsList) {
-                transactionsList.innerHTML = this.renderTransactionsList(transactions);
+                transactionsList.innerHTML = await this.renderTransactionsList(transactions);
             }
+            this.showToast(`${transactions.length}개의 거래내역을 찾았습니다.`);
         } catch (error) {
+            console.error('필터 적용 에러:', error);
             this.showError('필터 적용 중 오류가 발생했습니다.');
         }
     }
 
     // 필터 초기화
-    clearFilters() {
-        document.getElementById('filter-type').value = '';
-        document.getElementById('filter-category').value = '';
-        document.getElementById('filter-date-from').value = '';
-        document.getElementById('filter-date-to').value = '';
-        this.applyFilters();
-    }
-
-    // 거래 목록 렌더링
-    renderTransactionsList(transactions) {
-        if (!transactions || transactions.length === 0) {
-            return '<p class="no-data">거래 내역이 없습니다.</p>';
+    async clearFilters() {
+        try {
+            // 필터 값 초기화
+            const filterType = document.getElementById('filter-type');
+            const filterCategory = document.getElementById('filter-category');
+            const filterDateFrom = document.getElementById('filter-date-from');
+            const filterDateTo = document.getElementById('filter-date-to');
+            
+            if (filterType) filterType.value = '';
+            if (filterCategory) filterCategory.value = '';
+            
+            // 날짜 필터는 이번달 기본값으로 재설정
+            this.setDefaultDateFilters();
+            
+            this.showToast('필터를 초기화했습니다.');
+            await this.applyFilters();
+        } catch (error) {
+            console.error('필터 초기화 에러:', error);
+            this.showError('필터 초기화 중 오류가 발생했습니다.');
         }
-
-        return transactions.map(transaction => `
-            <div class="transaction-item">
-                <div class="transaction-icon">
-                    ${this.getTransactionIcon(transaction.type, transaction.category)}
-                </div>
-                <div class="transaction-info">
-                    <h4>${transaction.description}</h4>
-                    <p>${transaction.category} • ${transaction.date}</p>
-                </div>
-                <div class="transaction-amount ${transaction.type}">
-                    ${transaction.type === 'income' ? '+' : '-'}${this.formatCurrency(transaction.amount, transaction.currency)}
-                </div>
-            </div>
-        `).join('');
     }
+
 
     // 거래 아이콘 가져오기
     getTransactionIcon(type, category) {
@@ -2547,7 +2699,10 @@ class AdvancedBudgetApp {
                             
                             <div class="form-group">
                                 <label>금액 *</label>
-                                <input type="number" id="transaction-amount" required step="0.01" min="0" placeholder="0.00">
+                                <input type="text" id="transaction-amount" required placeholder="예: 1,000,000" 
+                                       oninput="budgetApp.formatAmountInput(this)" 
+                                       onkeypress="return budgetApp.validateNumberInput(event)">
+                                <div class="amount-korean" id="amount-korean" style="font-size: 0.85em; color: #666; margin-top: 4px; min-height: 18px;"></div>
                             </div>
                         </div>
                         
@@ -2561,7 +2716,7 @@ class AdvancedBudgetApp {
                             
                             <div class="form-group">
                                 <label>통화</label>
-                                <select id="transaction-currency">
+                                <select id="transaction-currency" onchange="budgetApp.updateKoreanDisplay()">
                                     ${currencyOptions}
                                 </select>
                             </div>
@@ -2604,6 +2759,10 @@ class AdvancedBudgetApp {
         
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
+        // 모달 오버레이 클릭으로 닫기 기능 추가
+        const modal = document.getElementById('transaction-modal');
+        this.addModalCloseOnOverlayClick(modal);
+        
         // 폼 제출 이벤트 리스너 추가
         const form = document.getElementById('add-transaction-form');
         form.addEventListener('submit', (e) => {
@@ -2643,7 +2802,7 @@ class AdvancedBudgetApp {
     async handleAddTransaction() {
         const transactionData = {
             type: document.getElementById('transaction-type').value,
-            amount: parseFloat(document.getElementById('transaction-amount').value),
+            amount: this.parseFormattedAmount(document.getElementById('transaction-amount').value),
             category: document.getElementById('transaction-category').value,
             currency: document.getElementById('transaction-currency').value,
             date: document.getElementById('transaction-date').value,
@@ -2685,9 +2844,7 @@ class AdvancedBudgetApp {
     // 거래 모달 닫기
     closeTransactionModal() {
         const modal = document.getElementById('transaction-modal');
-        if (modal) {
-            modal.remove();
-        }
+        this.closeModal(modal);
         
         // 임시 데이터 정리
         if (window.transactionCategoriesData) {
@@ -2752,7 +2909,11 @@ class AdvancedBudgetApp {
                                 
                                 <div class="form-group">
                                     <label>금액 *</label>
-                                    <input type="number" id="transaction-amount" required step="0.01" min="0" value="${Math.abs(transaction.amount)}">
+                                    <input type="text" id="transaction-amount" required placeholder="예: 1,000,000" 
+                                           value="${Math.abs(transaction.amount).toLocaleString('ko-KR')}"
+                                           oninput="budgetApp.formatAmountInput(this)" 
+                                           onkeypress="return budgetApp.validateNumberInput(event)">
+                                    <div class="amount-korean" id="amount-korean-edit" style="font-size: 0.85em; color: #666; margin-top: 4px; min-height: 18px;"></div>
                                 </div>
                             </div>
                             
@@ -2767,7 +2928,7 @@ class AdvancedBudgetApp {
                                 
                                 <div class="form-group">
                                     <label>통화</label>
-                                    <select id="transaction-currency">
+                                    <select id="transaction-currency" onchange="budgetApp.updateKoreanDisplay()">
                                         ${currencyOptions}
                                     </select>
                                 </div>
@@ -2810,6 +2971,10 @@ class AdvancedBudgetApp {
             
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
+            // 모달 오버레이 클릭으로 닫기 기능 추가
+            const modal = document.querySelector('.modal-overlay:last-child');
+            this.addModalCloseOnOverlayClick(modal);
+            
             // 폼 제출 이벤트 리스너 추가
             const form = document.getElementById('edit-transaction-form');
             form.addEventListener('submit', (e) => {
@@ -2817,6 +2982,20 @@ class AdvancedBudgetApp {
                 this.handleEditTransaction();
             });
             
+            // 초기 한글 표시
+            setTimeout(() => {
+                const amountInput = document.getElementById('transaction-amount');
+                const currencySelect = document.getElementById('transaction-currency');
+                if (amountInput && amountInput.value) {
+                    const selectedCurrency = currencySelect ? currencySelect.value : 'KRW';
+                    const korean = this.numberToKorean(this.parseFormattedAmount(amountInput.value), selectedCurrency);
+                    const koreanElement = document.getElementById('amount-korean-edit');
+                    if (koreanElement) {
+                        koreanElement.textContent = korean;
+                    }
+                }
+            }, 100);
+
             // 거래 유형별 카테고리 저장
             window.transactionCategoriesData = {
                 income: incomeOptions,
@@ -2836,7 +3015,7 @@ class AdvancedBudgetApp {
         const transactionId = document.getElementById('transaction-id').value;
         const transactionData = {
             type: document.getElementById('transaction-type').value,
-            amount: parseFloat(document.getElementById('transaction-amount').value),
+            amount: this.parseFormattedAmount(document.getElementById('transaction-amount').value),
             category: document.getElementById('transaction-category').value,
             currency: document.getElementById('transaction-currency').value,
             date: document.getElementById('transaction-date').value,
@@ -2902,9 +3081,9 @@ class AdvancedBudgetApp {
     // 포함 설정 로드
     async loadInclusionSettings() {
         try {
-            // 사용자 설정에서 포함 설정을 가져오거나 기본값 설정
-            const user = await this.dbManager.getUser(this.currentUser.id);
-            const inclusionSettings = user.settings?.inclusionSettings || this.getDefaultInclusionSettings();
+            // 개인 앱이므로 localStorage에서 설정을 가져오거나 기본값 설정
+            const savedSettings = localStorage.getItem('inclusion-settings');
+            const inclusionSettings = savedSettings ? JSON.parse(savedSettings) : this.getDefaultInclusionSettings();
             
             // 자산 유형별 설정 렌더링
             this.renderAssetInclusionSettings(inclusionSettings.assets);
@@ -3022,18 +3201,15 @@ class AdvancedBudgetApp {
     // 자산 포함 설정 업데이트
     async updateAssetInclusion(assetType, include) {
         try {
-            const user = await this.dbManager.getUser(this.currentUser.id);
+            // localStorage에서 현재 설정을 가져오거나 기본값 사용
+            const savedSettings = localStorage.getItem('inclusion-settings');
+            const inclusionSettings = savedSettings ? JSON.parse(savedSettings) : this.getDefaultInclusionSettings();
             
-            if (!user.settings) {
-                user.settings = {};
-            }
-            if (!user.settings.inclusionSettings) {
-                user.settings.inclusionSettings = this.getDefaultInclusionSettings();
-            }
+            // 자산 포함 설정 업데이트
+            inclusionSettings.assets[assetType] = include;
             
-            user.settings.inclusionSettings.assets[assetType] = include;
-            
-            await this.dbManager.updateUser(this.currentUser.id, { settings: user.settings });
+            // localStorage에 저장
+            localStorage.setItem('inclusion-settings', JSON.stringify(inclusionSettings));
             
             this.showToast(`${this.assetTypes[assetType].name} 자산 포함 설정이 ${include ? '포함' : '제외'}로 변경되었습니다.`);
             
@@ -3051,18 +3227,15 @@ class AdvancedBudgetApp {
     // 거래 포함 설정 업데이트
     async updateTransactionInclusion(type, category, include) {
         try {
-            const user = await this.dbManager.getUser(this.currentUser.id);
+            // localStorage에서 현재 설정을 가져오거나 기본값 사용
+            const savedSettings = localStorage.getItem('inclusion-settings');
+            const inclusionSettings = savedSettings ? JSON.parse(savedSettings) : this.getDefaultInclusionSettings();
             
-            if (!user.settings) {
-                user.settings = {};
-            }
-            if (!user.settings.inclusionSettings) {
-                user.settings.inclusionSettings = this.getDefaultInclusionSettings();
-            }
+            // 거래 포함 설정 업데이트
+            inclusionSettings.transactions[type][category] = include;
             
-            user.settings.inclusionSettings.transactions[type][category] = include;
-            
-            await this.dbManager.updateUser(this.currentUser.id, { settings: user.settings });
+            // localStorage에 저장
+            localStorage.setItem('inclusion-settings', JSON.stringify(inclusionSettings));
             
             const categoryName = this.transactionCategories[type][category].name;
             this.showToast(`${categoryName} 카테고리 포함 설정이 ${include ? '포함' : '제외'}로 변경되었습니다.`);
@@ -3253,14 +3426,367 @@ class AdvancedBudgetApp {
     }
 
     // 리포트 뷰 로드
-    loadReportsView() {
+    async loadReportsView() {
         const mainContent = document.getElementById('main-content');
-        mainContent.innerHTML = `
-            <div class="reports-view">
-                <h2>📊 리포트</h2>
-                <p>리포트 기능이 구현 중입니다.</p>
+        
+        try {
+            // 사용자 목록 가져오기
+            const users = await this.dbManager.getAllAccountUsers();
+            const userOptions = users.map(user => 
+                `<option value="${user.id}" ${user.id === this.selectedAccountUserId ? 'selected' : ''}>${user.name}</option>`
+            ).join('');
+
+            mainContent.innerHTML = `
+                <div class="reports-view">
+                    <div class="view-header">
+                        <h2><span class="view-icon">📊</span> 리포트</h2>
+                        
+                        ${await this.generateUserSelector()}
+                    </div>
+
+                    <div class="reports-content">
+                        <div class="report-section">
+                            <h3>월별 수입/지출 현황</h3>
+                            <div class="chart-container">
+                                <canvas id="monthly-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="report-section">
+                            <h3>카테고리별 지출 분석</h3>
+                            <div class="chart-container">
+                                <canvas id="category-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="report-section">
+                            <h3>자산 구성 현황</h3>
+                            <div class="chart-container">
+                                <canvas id="asset-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="report-summary">
+                            <h3>요약 정보</h3>
+                            <div id="report-summary-content" class="summary-grid">
+                                <!-- 요약 정보가 여기에 로드됩니다 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // 차트 데이터 로드
+            await this.loadReportCharts();
+            
+        } catch (error) {
+            console.error('리포트 로드 실패:', error);
+            mainContent.innerHTML = `
+                <div class="reports-view">
+                    <h2>📊 리포트</h2>
+                    <div class="error-message">
+                        <p>❌ 리포트 데이터를 불러오는 중 오류가 발생했습니다.</p>
+                        <p>${error.message}</p>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    // 리포트 차트 로드
+    async loadReportCharts() {
+        try {
+            // 필터 설정
+            const filters = {};
+            if (this.selectedAccountUserId && this.selectedAccountUserId !== 'all') {
+                filters.accountUserId = this.selectedAccountUserId;
+            }
+
+            // 데이터 가져오기
+            const transactions = await this.dbManager.getTransactions(null, filters);
+            const assets = await this.dbManager.getAssets(null, filters);
+
+            // 월별 수입/지출 차트
+            await this.renderMonthlyChart(transactions);
+            
+            // 카테고리별 지출 차트
+            await this.renderCategoryChart(transactions);
+            
+            // 자산 구성 차트
+            await this.renderAssetChart(assets);
+            
+            // 요약 정보
+            await this.renderReportSummary(transactions, assets);
+            
+        } catch (error) {
+            console.error('차트 로드 실패:', error);
+        }
+    }
+
+    // 월별 수입/지출 차트 렌더링
+    async renderMonthlyChart(transactions) {
+        const canvas = document.getElementById('monthly-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        
+        // 최근 6개월 데이터 준비
+        const monthlyData = this.prepareMonthlyData(transactions);
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: monthlyData.labels,
+                datasets: [
+                    {
+                        label: '수입',
+                        data: monthlyData.income,
+                        borderColor: '#4CAF50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        tension: 0.4
+                    },
+                    {
+                        label: '지출',
+                        data: monthlyData.expenses,
+                        borderColor: '#f44336',
+                        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '월별 수입/지출 추이'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return new Intl.NumberFormat('ko-KR').format(value) + '원';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 카테고리별 지출 차트 렌더링
+    async renderCategoryChart(transactions) {
+        const canvas = document.getElementById('category-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        
+        // 카테고리별 지출 데이터 준비
+        const categoryData = this.prepareCategoryData(transactions);
+        
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: categoryData.labels,
+                datasets: [{
+                    data: categoryData.values,
+                    backgroundColor: [
+                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                        '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
+                        '#4BC0C0', '#FF6384'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '카테고리별 지출 분석'
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    // 자산 구성 차트 렌더링
+    async renderAssetChart(assets) {
+        const canvas = document.getElementById('asset-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        
+        // 자산 유형별 데이터 준비
+        const assetData = this.prepareAssetData(assets);
+        
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: assetData.labels,
+                datasets: [{
+                    data: assetData.values,
+                    backgroundColor: [
+                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                        '#9966FF', '#FF9F40'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '자산 구성 현황'
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    // 리포트 요약 렌더링
+    async renderReportSummary(transactions, assets) {
+        const summaryElement = document.getElementById('report-summary-content');
+        if (!summaryElement) return;
+
+        // 이번 달 통계 계산
+        const thisMonth = new Date();
+        const startOfMonth = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1);
+        
+        const monthlyTransactions = transactions.filter(t => 
+            new Date(t.date) >= startOfMonth
+        );
+
+        const totalIncome = monthlyTransactions
+            .filter(t => t.type === 'income')
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        const totalExpenses = monthlyTransactions
+            .filter(t => t.type === 'expense')
+            .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+        const totalAssets = assets.reduce((sum, a) => sum + a.currentValue, 0);
+        
+        const balance = totalIncome - totalExpenses;
+
+        summaryElement.innerHTML = `
+            <div class="summary-card income">
+                <div class="summary-icon">💰</div>
+                <div class="summary-info">
+                    <h4>이번 달 수입</h4>
+                    <p class="summary-amount">${this.formatCurrency(totalIncome)}</p>
+                </div>
+            </div>
+            
+            <div class="summary-card expense">
+                <div class="summary-icon">💸</div>
+                <div class="summary-info">
+                    <h4>이번 달 지출</h4>
+                    <p class="summary-amount">${this.formatCurrency(totalExpenses)}</p>
+                </div>
+            </div>
+            
+            <div class="summary-card balance ${balance >= 0 ? 'positive' : 'negative'}">
+                <div class="summary-icon">${balance >= 0 ? '📈' : '📉'}</div>
+                <div class="summary-info">
+                    <h4>이번 달 수지</h4>
+                    <p class="summary-amount">${this.formatCurrency(balance)}</p>
+                </div>
+            </div>
+            
+            <div class="summary-card assets">
+                <div class="summary-icon">🏦</div>
+                <div class="summary-info">
+                    <h4>총 자산</h4>
+                    <p class="summary-amount">${this.formatCurrency(totalAssets)}</p>
+                </div>
             </div>
         `;
+    }
+
+    // 월별 데이터 준비
+    prepareMonthlyData(transactions) {
+        const now = new Date();
+        const months = [];
+        const income = [];
+        const expenses = [];
+
+        // 최근 6개월
+        for (let i = 5; i >= 0; i--) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            
+            months.push(`${date.getMonth() + 1}월`);
+            
+            const monthlyTransactions = transactions.filter(t => 
+                t.date.startsWith(monthStr)
+            );
+            
+            const monthlyIncome = monthlyTransactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + t.amount, 0);
+                
+            const monthlyExpenses = monthlyTransactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+            
+            income.push(monthlyIncome);
+            expenses.push(monthlyExpenses);
+        }
+
+        return {
+            labels: months,
+            income,
+            expenses
+        };
+    }
+
+    // 카테고리별 데이터 준비
+    prepareCategoryData(transactions) {
+        const categoryTotals = {};
+        
+        transactions
+            .filter(t => t.type === 'expense')
+            .forEach(t => {
+                const categoryInfo = this.transactionCategories.expense[t.category];
+                const categoryName = categoryInfo ? categoryInfo.name : t.category;
+                categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + Math.abs(t.amount);
+            });
+
+        const sortedCategories = Object.entries(categoryTotals)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 10); // 상위 10개만
+
+        return {
+            labels: sortedCategories.map(([name]) => name),
+            values: sortedCategories.map(([,value]) => value)
+        };
+    }
+
+    // 자산별 데이터 준비
+    prepareAssetData(assets) {
+        const assetTotals = {};
+        
+        assets.forEach(asset => {
+            const assetTypeInfo = this.assetTypes[asset.type];
+            const typeName = assetTypeInfo ? assetTypeInfo.name : asset.type;
+            assetTotals[typeName] = (assetTotals[typeName] || 0) + asset.currentValue;
+        });
+
+        const sortedAssets = Object.entries(assetTotals)
+            .sort(([,a], [,b]) => b - a);
+
+        return {
+            labels: sortedAssets.map(([name]) => name),
+            values: sortedAssets.map(([,value]) => value)
+        };
     }
 
     // 설정 뷰 로드
@@ -3349,7 +3875,7 @@ class AdvancedBudgetApp {
             // 로그인 성공
             this.currentUser = user;
             this.dbManager.setCurrentUser(user.id);
-            this.showMainApp();
+            await this.showMainApp();
             this.showToast('로그인되었습니다.');
             
         } catch (error) {
@@ -3410,7 +3936,7 @@ class AdvancedBudgetApp {
             // 자동 로그인
             this.currentUser = await this.dbManager.getUser(userId);
             this.dbManager.setCurrentUser(userId);
-            this.showMainApp();
+            await this.showMainApp();
             this.showToast('회원가입이 완료되었습니다.');
             
         } catch (error) {
@@ -3564,6 +4090,10 @@ class AdvancedBudgetApp {
         
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
+        // 모달 오버레이 클릭으로 닫기 기능 추가
+        const modal = document.getElementById('add-user-modal');
+        this.addModalCloseOnOverlayClick(modal);
+        
         document.getElementById('add-user-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleAddUser();
@@ -3602,9 +4132,7 @@ class AdvancedBudgetApp {
     // 사용자 추가 모달 닫기
     closeAddUserModal() {
         const modal = document.getElementById('add-user-modal');
-        if (modal) {
-            modal.remove();
-        }
+        this.closeModal(modal);
     }
 
     // 사용자 수정
@@ -3786,7 +4314,7 @@ class AdvancedBudgetApp {
                         사용자 선택:
                     </label>
                     <select id="account-user-select" onchange="budgetApp.onAccountUserChange(this.value)">
-                        <option value="">전체 보기</option>
+                        <option value="all" ${this.selectedAccountUserId === 'all' ? 'selected' : ''}>전체 보기</option>
                         ${userOptions}
                     </select>
                 </div>
@@ -3799,7 +4327,7 @@ class AdvancedBudgetApp {
 
     // 사용자 선택 변경 시
     onAccountUserChange(userId) {
-        this.selectedAccountUserId = userId || null;
+        this.selectedAccountUserId = userId || 'all';
         
         // 현재 뷰 새로고침
         switch (this.currentView) {
@@ -3812,7 +4340,439 @@ class AdvancedBudgetApp {
             case 'assets':
                 this.navigateTo('assets');
                 break;
+            case 'reports':
+                this.loadReportCharts();
+                break;
         }
+    }
+
+    // 금액 입력 필드 포맷팅
+    formatAmountInput(input) {
+        // 현재 커서 위치 저장
+        const cursorPosition = input.selectionStart;
+        const oldValue = input.value;
+        
+        // 숫자만 추출
+        const numbers = input.value.replace(/[^\d]/g, '');
+        
+        if (numbers === '') {
+            input.value = '';
+            // 모든 가능한 한글 표시 영역 클리어
+            const koreanElements = ['amount-korean', 'amount-korean-edit'].map(id => document.getElementById(id)).filter(el => el);
+            koreanElements.forEach(el => el.textContent = '');
+            return;
+        }
+        
+        // 천단위 콤마 추가
+        const formatted = parseInt(numbers).toLocaleString('ko-KR');
+        input.value = formatted;
+        
+        // 현재 선택된 통화 가져오기
+        const currencySelect = document.getElementById('transaction-currency');
+        const selectedCurrency = currencySelect ? currencySelect.value : 'KRW';
+        
+        // 한글로 변환 (통화 반영)
+        const korean = this.numberToKorean(parseInt(numbers), selectedCurrency);
+        
+        // 모든 가능한 한글 표시 영역에 적용
+        const koreanElements = ['amount-korean', 'amount-korean-edit'].map(id => document.getElementById(id)).filter(el => el);
+        koreanElements.forEach(el => el.textContent = korean);
+        
+        // 커서 위치 조정
+        const difference = formatted.length - oldValue.length;
+        const newPosition = cursorPosition + difference;
+        setTimeout(() => {
+            input.setSelectionRange(newPosition, newPosition);
+        }, 0);
+    }
+
+    // 숫자 입력만 허용
+    validateNumberInput(event) {
+        const key = event.key;
+        // 숫자, 백스페이스, 삭제, 방향키만 허용
+        if (!/^\d$/.test(key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(key)) {
+            event.preventDefault();
+            return false;
+        }
+        return true;
+    }
+
+    // 숫자를 한글로 변환 (통화별 단위 포함)
+    numberToKorean(num, currency = 'KRW') {
+        if (num === 0) {
+            const currencyUnits = {
+                'KRW': '영원',
+                'USD': '영달러',
+                'EUR': '영유로',
+                'JPY': '영엔',
+                'CNY': '영위안'
+            };
+            return currencyUnits[currency] || '영원';
+        }
+        
+        const units = ['', '만', '억', '조', '경'];
+        const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+        const teens = ['', '십', '백', '천'];
+        
+        const numStr = num.toString();
+        const len = numStr.length;
+        let result = '';
+        
+        // 4자리씩 끊어서 처리
+        const groups = [];
+        for (let i = len; i > 0; i -= 4) {
+            const start = Math.max(0, i - 4);
+            const group = numStr.substring(start, i);
+            groups.unshift(group);
+        }
+        
+        groups.forEach((group, groupIndex) => {
+            if (parseInt(group) === 0) return;
+            
+            let groupResult = '';
+            const groupNum = parseInt(group);
+            
+            // 천의 자리
+            const thousand = Math.floor(groupNum / 1000);
+            if (thousand > 0) {
+                if (thousand > 1) groupResult += digits[thousand];
+                groupResult += '천';
+            }
+            
+            // 백의 자리
+            const hundred = Math.floor((groupNum % 1000) / 100);
+            if (hundred > 0) {
+                if (hundred > 1) groupResult += digits[hundred];
+                groupResult += '백';
+            }
+            
+            // 십의 자리
+            const ten = Math.floor((groupNum % 100) / 10);
+            if (ten > 0) {
+                if (ten > 1) groupResult += digits[ten];
+                groupResult += '십';
+            }
+            
+            // 일의 자리
+            const one = groupNum % 10;
+            if (one > 0) {
+                groupResult += digits[one];
+            }
+            
+            // 단위 추가
+            const unitIndex = groups.length - 1 - groupIndex;
+            if (unitIndex > 0 && groupResult !== '') {
+                groupResult += units[unitIndex];
+            }
+            
+            result += groupResult;
+        });
+        
+        // 통화별 단위 추가
+        const currencyUnits = {
+            'KRW': '원',
+            'USD': '달러',
+            'EUR': '유로',
+            'JPY': '엔',
+            'CNY': '위안'
+        };
+        
+        return result + (currencyUnits[currency] || '원');
+    }
+
+    // 포맷된 금액을 숫자로 변환
+    parseFormattedAmount(formattedAmount) {
+        return parseInt(formattedAmount.replace(/[^\d]/g, '')) || 0;
+    }
+
+    // 통화 선택 변경 시 한글 표시 업데이트
+    updateKoreanDisplay() {
+        const amountInput = document.getElementById('transaction-amount');
+        if (!amountInput || !amountInput.value) return;
+
+        const numbers = amountInput.value.replace(/[^\d]/g, '');
+        if (numbers === '') return;
+
+        const currencySelect = document.getElementById('transaction-currency');
+        const selectedCurrency = currencySelect ? currencySelect.value : 'KRW';
+        
+        const korean = this.numberToKorean(parseInt(numbers), selectedCurrency);
+        
+        const koreanElements = ['amount-korean', 'amount-korean-edit'].map(id => document.getElementById(id)).filter(el => el);
+        koreanElements.forEach(el => el.textContent = korean);
+    }
+
+    // ESC 키로 모달 닫기 기능 초기화
+    initEscapeKeyHandler() {
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                // 현재 열려있는 모든 모달 찾기
+                const modals = document.querySelectorAll('.modal-overlay');
+                if (modals.length > 0) {
+                    // 가장 마지막(최상위) 모달 닫기
+                    const lastModal = modals[modals.length - 1];
+                    this.closeModal(lastModal);
+                }
+            }
+        });
+    }
+
+    // 범용 모달 닫기 함수
+    closeModal(modal) {
+        if (modal) {
+            modal.remove();
+        }
+    }
+
+    // 모든 모달에 오버레이 클릭으로 닫기 기능 추가
+    addModalCloseOnOverlayClick(modal) {
+        if (modal) {
+            modal.addEventListener('click', (event) => {
+                // 모달 오버레이를 클릭했을 때만 닫기 (모달 내용 클릭시에는 닫지 않음)
+                if (event.target === modal) {
+                    this.closeModal(modal);
+                }
+            });
+        }
+    }
+
+    // 비밀번호에서 암호화 키 생성 (PBKDF2 사용)
+    async deriveKeyFromPassword(password, salt = null) {
+        const encoder = new TextEncoder();
+        const passwordBuffer = encoder.encode(password);
+        
+        // 솔트가 없으면 새로 생성
+        if (!salt) {
+            salt = crypto.getRandomValues(new Uint8Array(32));
+        }
+
+        // 비밀번호를 키로 가져오기
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            passwordBuffer,
+            { name: 'PBKDF2' },
+            false,
+            ['deriveKey']
+        );
+
+        // PBKDF2로 AES 키 생성
+        const key = await crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt: salt,
+                iterations: 100000,
+                hash: 'SHA-256'
+            },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+
+        return { key, salt };
+    }
+
+    // 데이터 암호화
+    async encryptData(data, password) {
+        try {
+            // 키 생성
+            const { key, salt } = await this.deriveKeyFromPassword(password);
+
+            // 데이터를 JSON 문자열로 변환
+            const encoder = new TextEncoder();
+            const encodedData = encoder.encode(JSON.stringify(data));
+
+            // IV 생성
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+
+            // AES-GCM으로 암호화
+            const encryptedData = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                encodedData
+            );
+
+            return {
+                encryptedData: Array.from(new Uint8Array(encryptedData)),
+                salt: Array.from(salt),
+                iv: Array.from(iv),
+                algorithm: 'AES-GCM-PBKDF2'
+            };
+        } catch (error) {
+            console.error('암호화 실패:', error);
+            throw new Error('데이터 암호화에 실패했습니다.');
+        }
+    }
+
+    // 데이터 복호화
+    async decryptData(encryptedPackage, password) {
+        try {
+            // 키 복원
+            const { key } = await this.deriveKeyFromPassword(
+                password, 
+                new Uint8Array(encryptedPackage.salt)
+            );
+
+            // 데이터 복호화
+            const decryptedData = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: new Uint8Array(encryptedPackage.iv) },
+                key,
+                new Uint8Array(encryptedPackage.encryptedData)
+            );
+
+            const decoder = new TextDecoder();
+            const jsonString = decoder.decode(decryptedData);
+            return JSON.parse(jsonString);
+        } catch (error) {
+            console.error('복호화 실패:', error);
+            throw new Error('잘못된 암호이거나 데이터가 손상되었습니다.');
+        }
+    }
+
+    // 암호 변경 모달 표시
+    showChangePasswordModal() {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>🔐 암호 변경</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>현재 암호</label>
+                        <input type="password" id="current-password" placeholder="현재 암호 입력" required>
+                    </div>
+                    <div class="form-group">
+                        <label>새 암호 (4-6자리)</label>
+                        <input type="password" id="new-password" placeholder="새 암호 입력" minlength="4" maxlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label>새 암호 확인</label>
+                        <input type="password" id="new-password-confirm" placeholder="새 암호 다시 입력" minlength="4" maxlength="6" required>
+                    </div>
+                    <p class="help-text">보안을 위해 4-6자리 숫자로 설정해주세요.</p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">취소</button>
+                    <button type="button" class="btn-primary" id="change-password-btn">변경</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        document.getElementById('change-password-btn').onclick = () => {
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('new-password-confirm').value;
+
+            // 현재 암호 확인
+            const savedPassword = localStorage.getItem('app-password');
+            if (currentPassword !== savedPassword) {
+                this.showError('현재 암호가 일치하지 않습니다.');
+                return;
+            }
+
+            // 새 암호 유효성 검사
+            if (!newPassword || newPassword.length < 4 || newPassword.length > 6) {
+                this.showError('새 암호는 4-6자리로 입력해주세요.');
+                return;
+            }
+
+            if (!/^\d+$/.test(newPassword)) {
+                this.showError('암호는 숫자만 입력 가능합니다.');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                this.showError('새 암호가 일치하지 않습니다.');
+                return;
+            }
+
+            if (newPassword === currentPassword) {
+                this.showError('현재 암호와 동일합니다. 다른 암호를 입력해주세요.');
+                return;
+            }
+
+            // 암호 변경
+            localStorage.setItem('app-password', newPassword);
+            modal.remove();
+            this.showToast('암호가 성공적으로 변경되었습니다.');
+        };
+
+        // Enter 키 처리
+        modal.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('change-password-btn').click();
+            }
+        });
+
+        // 첫 번째 입력 필드에 포커스
+        setTimeout(() => document.getElementById('current-password').focus(), 100);
+    }
+
+    // 암호 입력 모달 표시
+    showPasswordInputModal(title, onConfirm) {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>🔐 ${title}</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>암호를 입력하세요</label>
+                        <input type="password" id="data-password" placeholder="암호 입력" required>
+                    </div>
+                    <div class="form-group" id="confirm-password-group" style="display: none;">
+                        <label>암호 확인</label>
+                        <input type="password" id="data-password-confirm" placeholder="암호 다시 입력">
+                    </div>
+                    <p class="help-text">이 암호는 데이터를 안전하게 보호하기 위해 사용됩니다.</p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">취소</button>
+                    <button type="button" class="btn-primary" id="password-confirm-btn">확인</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // 비밀번호 확인이 필요한 경우 (내보내기)
+        if (title.includes('내보내기')) {
+            document.getElementById('confirm-password-group').style.display = 'block';
+        }
+
+        document.getElementById('password-confirm-btn').onclick = () => {
+            const password = document.getElementById('data-password').value;
+            const confirmPassword = document.getElementById('data-password-confirm').value;
+
+            if (!password) {
+                this.showError('암호를 입력해주세요.');
+                return;
+            }
+
+            if (title.includes('내보내기') && password !== confirmPassword) {
+                this.showError('암호가 일치하지 않습니다.');
+                return;
+            }
+
+            modal.remove();
+            onConfirm(password);
+        };
+
+        // Enter 키 처리
+        modal.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('password-confirm-btn').click();
+            }
+        });
+
+        // 첫 번째 입력 필드에 포커스
+        setTimeout(() => document.getElementById('data-password').focus(), 100);
     }
 }
 
@@ -3825,6 +4785,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const app = new AdvancedBudgetApp();
         await app.init();
         window.budgetApp = app; // 디버깅용
+        
+        // ESC 키 핸들러 초기화
+        app.initEscapeKeyHandler();
         
         //console.log('앱 초기화 완료');
         
