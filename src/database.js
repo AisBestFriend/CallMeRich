@@ -276,13 +276,12 @@ class DatabaseManager {
     }
 
     async getTransactions(userId = null, filters = {}) {
-        userId = userId || this.currentUserId;
         const transaction = this.db.transaction(['transactions'], 'readonly');
         const store = transaction.objectStore('transactions');
-        const index = store.index('userId');
         
         return new Promise((resolve, reject) => {
-            const request = index.getAll(userId);
+            // 모든 거래 데이터를 가져오도록 수정
+            const request = store.getAll();
             request.onsuccess = () => {
                 let results = request.result;
                 
@@ -330,7 +329,7 @@ class DatabaseManager {
             const getRequest = store.get(id);
             getRequest.onsuccess = () => {
                 const txn = getRequest.result;
-                if (txn && txn.userId === this.currentUserId) {
+                if (txn) {
                     Object.assign(txn, updateData, { 
                         updatedAt: new Date().toISOString() 
                     });
@@ -339,7 +338,7 @@ class DatabaseManager {
                     putRequest.onsuccess = () => resolve(txn);
                     putRequest.onerror = () => reject(putRequest.error);
                 } else {
-                    reject(new Error('거래를 찾을 수 없거나 권한이 없습니다.'));
+                    reject(new Error('거래를 찾을 수 없습니다.'));
                 }
             };
             getRequest.onerror = () => reject(getRequest.error);
@@ -354,12 +353,12 @@ class DatabaseManager {
             const getRequest = store.get(id);
             getRequest.onsuccess = () => {
                 const txn = getRequest.result;
-                if (txn && txn.userId === this.currentUserId) {
+                if (txn) {
                     const deleteRequest = store.delete(id);
                     deleteRequest.onsuccess = () => resolve(true);
                     deleteRequest.onerror = () => reject(deleteRequest.error);
                 } else {
-                    reject(new Error('거래를 찾을 수 없거나 권한이 없습니다.'));
+                    reject(new Error('거래를 찾을 수 없습니다.'));
                 }
             };
             getRequest.onerror = () => reject(getRequest.error);
@@ -1406,6 +1405,146 @@ class DatabaseManager {
             };
             getRequest.onerror = () => reject(getRequest.error);
         });
+    }
+
+    // 완전한 데이터베이스 초기화 및 기본 사용자 생성
+    async completeReset() {
+        try {
+            // 모든 데이터 삭제
+            await this.clearAllData();
+            
+            // account_users 테이블도 초기화
+            const transaction = this.db.transaction(['account_users'], 'readwrite');
+            const store = transaction.objectStore('account_users');
+            await new Promise((resolve, reject) => {
+                const request = store.clear();
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+            
+            // 로컬 스토리지 초기화
+            localStorage.removeItem('currentUserId');
+            this.currentUserId = null;
+            
+            // 기본 사용자 생성
+            const defaultUser = await this.createUser({
+                username: 'default_user',
+                email: 'default@callmerich.app',
+                password: 'default123',
+                displayName: '기본 사용자',
+                defaultCurrency: 'KRW',
+                settings: {
+                    theme: 'light',
+                    language: 'ko',
+                    notifications: true,
+                    defaultView: 'dashboard'
+                }
+            });
+            
+            // 기본 사용자로 로그인
+            this.setCurrentUser(defaultUser.id);
+            
+            // 기본 가계부 사용자들 생성
+            const accountUsers = [
+                {
+                    name: '윤찬영',
+                    relationship: '본인',
+                    gender: 'male',
+                    occupation: '직장인'
+                },
+                {
+                    name: '제연주',
+                    relationship: '배우자',
+                    gender: 'female',
+                    occupation: '직장인'
+                }
+            ];
+            
+            for (const userData of accountUsers) {
+                await this.addAccountUser(userData);
+            }
+            
+            return {
+                success: true,
+                message: '데이터베이스가 완전히 초기화되고 기본 사용자가 생성되었습니다.',
+                userId: defaultUser.id
+            };
+            
+        } catch (error) {
+            console.error('완전 초기화 실패:', error);
+            throw new Error(`완전 초기화 실패: ${error.message}`);
+        }
+    }
+
+    // 엑셀 데이터 삽입
+    async insertExcelData() {
+        if (!this.currentUserId) {
+            throw new Error('로그인이 필요합니다.');
+        }
+        
+        try {
+            // 가계부 사용자들 가져오기
+            const accountUsers = await this.getAllAccountUsers();
+            const userMap = {};
+            accountUsers.forEach(user => {
+                userMap[user.name] = user.id;
+            });
+            
+            // transactions_data.json에서 데이터 가져오기
+            const response = await fetch('./transactions_data.json');
+            const transactionsData = await response.json();
+            
+            let insertedCount = 0;
+            let skippedCount = 0;
+            
+            for (const transactionData of transactionsData) {
+                try {
+                    // userId를 이름에서 ID로 변환
+                    const accountUserId = userMap[transactionData.userId];
+                    if (!accountUserId) {
+                        console.warn(`사용자를 찾을 수 없습니다: ${transactionData.userId}`);
+                        skippedCount++;
+                        continue;
+                    }
+                    
+                    // 카테고리 매핑 수정
+                    let category = transactionData.category;
+                    if (category.startsWith('income_')) {
+                        category = category.replace('income_', '');
+                    } else if (category.startsWith('expense_')) {
+                        category = category.replace('expense_', '');
+                    }
+                    
+                    const newTransaction = {
+                        ...transactionData,
+                        id: this.generateId(),
+                        userId: this.currentUserId,
+                        accountUserId: accountUserId,
+                        category: category,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    await this.createTransaction(newTransaction);
+                    insertedCount++;
+                    
+                } catch (error) {
+                    console.error(`거래 삽입 실패:`, error);
+                    skippedCount++;
+                }
+            }
+            
+            return {
+                success: true,
+                message: `${insertedCount}개의 거래가 삽입되었습니다. (건너뜀: ${skippedCount}개)`,
+                inserted: insertedCount,
+                skipped: skippedCount
+            };
+            
+        } catch (error) {
+            console.error('엑셀 데이터 삽입 실패:', error);
+            throw new Error(`엑셀 데이터 삽입 실패: ${error.message}`);
+        }
     }
 }
 

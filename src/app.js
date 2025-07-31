@@ -826,12 +826,17 @@ class AdvancedBudgetApp {
             return '<div class="no-data">거래 내역이 없습니다.</div>';
         }
 
-        // 사용자 정보를 미리 로드
-        const users = await this.dbManager.getAllAccountUsers();
-        const userMap = users.reduce((map, user) => {
-            map[user.id] = user;
-            return map;
-        }, {});
+        // 사용자 정보를 간단하게 매핑 (모든 가능한 ID 포함)
+        const userMap = {
+            "윤찬영": { displayName: "윤찬영" },
+            "제연주": { displayName: "제연주" },
+            "chanyoung_user": { displayName: "윤찬영" },
+            "yeonju_user": { displayName: "제연주" },
+            "chanyoung_account": { displayName: "윤찬영" },
+            "yeonju_account": { displayName: "제연주" },
+            "chanyoung": { displayName: "윤찬영" },
+            "yeonju": { displayName: "제연주" }
+        };
 
         return transactions.map(transaction => {
             const category = this.transactionCategories[transaction.type]?.[transaction.category];
@@ -842,11 +847,11 @@ class AdvancedBudgetApp {
             const amountClass = transaction.type === 'income' ? 'income' : 'expense';
             const formattedAmount = this.formatCurrency(amount, transaction.currency);
             
-            const createdDate = new Date(transaction.createdAt).toLocaleDateString('ko-KR');
-            const createdTime = new Date(transaction.createdAt).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'});
+            const createdDate = new Date(transaction.createdAt || transaction.date).toLocaleDateString('ko-KR');
+            const createdTime = new Date(transaction.createdAt || transaction.date).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'});
             
-            // 사용자 정보
-            const user = userMap[transaction.accountUserId];
+            // 사용자 정보 - userId에서 직접 매핑
+            const user = userMap[transaction.userId] || { displayName: transaction.userId || "미지정" };
             const userInfo = user ? `${user.name}${user.relationship ? ` (${user.relationship})` : ''}` : '미지정';
             
             return `
@@ -1717,8 +1722,8 @@ class AdvancedBudgetApp {
                     
                     <div class="settings-section">
                         <h2>계정</h2>
-                        <button class="btn-danger" onclick="budgetApp.logout()">
-                            로그아웃
+                        <button class="btn-danger" onclick="budgetApp.completeReset()">
+                            완전 초기화
                         </button>
                     </div>
                 </div>
@@ -1827,14 +1832,43 @@ class AdvancedBudgetApp {
         }
     }
 
-    // 로그아웃
-    logout() {
-        if (confirm('로그아웃하시겠습니까?')) {
-            this.dbManager.setCurrentUser(null);
-            this.currentUser = null;
-            document.getElementById('app-nav').style.display = 'none';
-            document.getElementById('main-content').style.display = 'none';
-            this.showAuthForm();
+    // 완전 초기화
+    async completeReset() {
+        if (confirm('데이터베이스를 완전히 초기화하고 기본 사용자와 엑셀 데이터를 다시 불러오시겠습니까?\n\n주의: 모든 데이터가 삭제됩니다!')) {
+            try {
+                // 로딩 표시
+                this.showLoadingModal('데이터베이스 초기화 중...');
+                
+                // 완전 초기화 실행
+                const resetResult = await this.dbManager.completeReset();
+                console.log('초기화 완료:', resetResult);
+                
+                // 로딩 메시지 변경
+                this.updateLoadingModal('엑셀 데이터 삽입 중...');
+                
+                // 엑셀 데이터 삽입
+                const insertResult = await this.dbManager.insertExcelData();
+                console.log('데이터 삽입 완료:', insertResult);
+                
+                // 로딩 종료
+                this.hideLoadingModal();
+                
+                // 현재 사용자 업데이트
+                this.currentUser = await this.dbManager.getUser(resetResult.userId);
+                
+                // 성공 메시지 표시
+                alert(`초기화 완료!\n\n${resetResult.message}\n${insertResult.message}`);
+                
+                // 대시보드로 이동하여 새로운 데이터 표시
+                this.currentView = 'dashboard';
+                this.selectedAccountUserId = 'all';
+                this.render();
+                
+            } catch (error) {
+                this.hideLoadingModal();
+                console.error('완전 초기화 실패:', error);
+                alert(`초기화 실패: ${error.message}`);
+            }
         }
     }
 
@@ -3222,9 +3256,9 @@ class AdvancedBudgetApp {
                 this.handleNavigationClick(e);
             }
             
-            // 로그아웃 버튼
-            if (e.target.matches('#logout-btn')) {
-                this.logout();
+            // 완전 초기화 버튼
+            if (e.target.matches('#reset-btn')) {
+                this.completeReset();
             }
         });
         
@@ -4723,6 +4757,60 @@ class AdvancedBudgetApp {
 
         // 첫 번째 입력 필드에 포커스
         setTimeout(() => document.getElementById('data-password').focus(), 100);
+    }
+
+    // 로딩 모달 표시
+    showLoadingModal(message = '로딩 중...') {
+        // 기존 로딩 모달이 있으면 제거
+        const existingModal = document.getElementById('loading-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'loading-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal">
+                <div class="modal-body" style="text-align: center; padding: 2rem;">
+                    <div class="loading-spinner" style="margin-bottom: 1rem;">
+                        <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                    </div>
+                    <p id="loading-message" style="margin: 0; font-size: 1.1em;">${message}</p>
+                </div>
+            </div>
+        `;
+
+        // 스피너 애니메이션 CSS 추가
+        if (!document.getElementById('spinner-styles')) {
+            const style = document.createElement('style');
+            style.id = 'spinner-styles';
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(modal);
+    }
+
+    // 로딩 모달 메시지 업데이트
+    updateLoadingModal(message) {
+        const messageElement = document.getElementById('loading-message');
+        if (messageElement) {
+            messageElement.textContent = message;
+        }
+    }
+
+    // 로딩 모달 숨기기
+    hideLoadingModal() {
+        const modal = document.getElementById('loading-modal');
+        if (modal) {
+            modal.remove();
+        }
     }
 }
 
