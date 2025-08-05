@@ -158,3 +158,9 @@ npm run deploy     # echo 'Ready for deployment - all files are static'
 - PWA와 하이브리드 앱 양쪽을 고려한 개발이 필요합니다
 - IndexedDB의 비동기 특성을 고려하여 Promise 기반으로 작업하세요
 - UI는 완전 반응형이며 모바일 우선으로 설계되었습니다
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
