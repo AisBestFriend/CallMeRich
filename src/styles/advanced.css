@@ -2462,6 +2462,27 @@
     box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
 }
 
+/* 정렬 드롭다운 스타일 */
+#sort-option {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    color: var(--dark-color);
+    font-weight: 500;
+    position: relative;
+    margin-left: auto;
+    order: 999;
+}
+
+#sort-option:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    border-color: var(--primary-color);
+}
+
+#sort-option:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.15);
+}
+
 /* === 사용자별 요약 카드 스타일 === */
 .user-summaries {
     display: grid;
@@ -2487,6 +2508,100 @@
 .user-summary-card.error {
     border-color: var(--danger-color);
     background: rgba(244, 67, 54, 0.05);
+}
+
+.user-summary-card.overall-summary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.user-summary-card.overall-summary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+    z-index: 1;
+}
+
+.user-summary-card.overall-summary * {
+    position: relative;
+    z-index: 2;
+}
+
+.user-summary-card.overall-summary .user-header {
+    border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-summary-card.overall-summary .user-info h3 {
+    color: white;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.user-summary-card.overall-summary .user-relationship {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.user-summary-card.overall-summary .summary-value {
+    color: white;
+    font-weight: 600;
+}
+
+.user-summary-card.overall-summary .summary-label {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.user-summary-card.overall-summary .summary-value.income {
+    color: #a8f5a8;
+}
+
+.user-summary-card.overall-summary .summary-value.expense {
+    color: #ffb3b3;
+}
+
+.user-summary-card.overall-summary .summary-value.assets {
+    color: #87ceeb;
+}
+
+.user-summary-card.overall-summary .view-toggle {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.25rem;
+    border-radius: var(--border-radius);
+    display: flex;
+    gap: 0.25rem;
+}
+
+.user-summary-card.overall-summary .toggle-btn {
+    background: white;
+    color: var(--muted-color);
+    border: 1px solid #e0e0e0;
+    padding: 0.5rem 1rem;
+    border-radius: calc(var(--border-radius) - 2px);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.user-summary-card.overall-summary .toggle-btn:hover {
+    background: rgba(33, 150, 243, 0.05);
+    color: var(--primary-color);
+    border-color: rgba(33, 150, 243, 0.3);
+}
+
+.user-summary-card.overall-summary .toggle-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
 }
 
 .user-header {
@@ -2707,3 +2822,485 @@
 }
 
 /* === 설정 페이지 끝 === */
+
+/* === 월별 차트 스타일 === */
+.monthly-chart-section {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+
+.monthly-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.monthly-header h4 {
+    margin: 0;
+    color: var(--dark-color);
+    font-size: var(--font-size-lg);
+}
+
+.view-toggle {
+    display: flex;
+    gap: 0.5rem;
+    background: var(--light-color);
+    padding: 0.25rem;
+    border-radius: var(--border-radius);
+}
+
+.toggle-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid #e0e0e0;
+    background: white;
+    color: var(--muted-color);
+    border-radius: calc(var(--border-radius) - 2px);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.toggle-btn:hover {
+    background: rgba(33, 150, 243, 0.05);
+    color: var(--primary-color);
+    border-color: rgba(33, 150, 243, 0.3);
+}
+
+.toggle-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
+}
+
+.monthly-content {
+    transition: var(--transition);
+}
+
+/* === 월별 표 스타일 === */
+.monthly-table {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.monthly-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.monthly-data-table th {
+    background: var(--primary-color);
+    color: white;
+    padding: 1rem 0.75rem;
+    text-align: center;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+}
+
+.monthly-data-table td {
+    padding: 0.75rem;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    font-size: var(--font-size-sm);
+}
+
+.month-row.empty-month {
+    opacity: 0.5;
+    background: #fafafa;
+}
+
+.month-cell {
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.clickable-month {
+    color: var(--primary-color);
+    font-weight: 700;
+    transition: var(--transition);
+}
+
+.month-row:hover:not(.empty-month) {
+    background: rgba(33, 150, 243, 0.05);
+    transform: scale(1.01);
+}
+
+.month-row:hover:not(.empty-month) .clickable-month {
+    color: var(--success-color);
+}
+
+.amount {
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+    min-width: 80px;
+}
+
+.amount.income {
+    color: var(--success-color);
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.amount.expense {
+    color: var(--danger-color);
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.amount.balance.positive {
+    color: var(--success-color);
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.amount.balance.negative {
+    color: var(--danger-color);
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.amount.total {
+    font-weight: 700;
+    font-size: var(--font-size-base);
+}
+
+.amount-zero {
+    color: var(--muted-color);
+    font-style: italic;
+}
+
+.transaction-count-badge {
+    background: var(--info-color);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+    min-width: 40px;
+}
+
+.transaction-count-badge.total {
+    background: var(--dark-color);
+    font-size: var(--font-size-sm);
+}
+
+.total-row {
+    background: var(--light-color);
+    border-top: 2px solid var(--primary-color);
+}
+
+.total-row td {
+    border-bottom: none;
+    padding: 1rem 0.75rem;
+    font-weight: 600;
+}
+
+.monthly-chart {
+    width: 100%;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: var(--font-size-sm);
+    color: var(--muted-color);
+}
+
+.legend-item.income {
+    color: var(--success-color);
+}
+
+.legend-item.expense {
+    color: var(--danger-color);
+}
+
+.legend-item.balance {
+    color: var(--primary-color);
+}
+
+/* 가로 막대 차트 스타일 */
+.monthly-chart.horizontal .chart-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 0;
+}
+
+.monthly-chart.horizontal .month-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    border-radius: var(--border-radius);
+    min-height: 50px;
+}
+
+.monthly-chart.horizontal .month-label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--dark-color);
+    min-width: 50px;
+    text-align: right;
+}
+
+.monthly-chart.horizontal .clickable-month-row {
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.monthly-chart.horizontal .clickable-month-row:hover {
+    background: rgba(33, 150, 243, 0.05);
+    transform: translateX(4px);
+}
+
+.monthly-chart.horizontal .clickable-month-row:hover .month-label {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.monthly-chart.horizontal .bars-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 60%;
+}
+
+.monthly-chart.horizontal .month-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+    min-width: 100px;
+}
+
+/* 가로 막대 스타일 */
+.monthly-chart.horizontal .income-bar,
+.monthly-chart.horizontal .expense-bar {
+    height: 20px;
+    min-width: 2px;
+    border-radius: 0 10px 10px 0;
+    position: relative;
+    font-size: 11px;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 8px;
+    box-sizing: border-box;
+    transition: var(--transition);
+}
+
+.monthly-chart.horizontal .income-bar {
+    background: linear-gradient(to right, var(--success-color), #66BB6A);
+}
+
+.monthly-chart.horizontal .expense-bar {
+    background: linear-gradient(to right, var(--danger-color), #EF5350);
+}
+
+.monthly-chart.horizontal .bar-text {
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    white-space: nowrap;
+}
+
+/* 기존 세로 막대 차트 스타일 (백워드 호환성) */
+.chart-bars {
+    display: flex;
+    gap: 0.5rem;
+    align-items: end;
+    height: 200px;
+    overflow-x: auto;
+    padding: 1rem 0;
+}
+
+.month-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+    height: 100%;
+}
+
+.month-label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--dark-color);
+}
+
+.clickable-month-bar {
+    transition: var(--transition);
+    border-radius: var(--border-radius);
+    padding: 0.25rem;
+    margin: -0.25rem;
+}
+
+.clickable-month-bar:hover {
+    background: rgba(33, 150, 243, 0.1);
+    transform: scale(1.05);
+}
+
+.clickable-month-bar:hover .month-label {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.clickable-month-bar:hover .income-bar,
+.clickable-month-bar:hover .expense-bar {
+    opacity: 0.8;
+    transform: scaleY(1.05);
+}
+
+.bar-container {
+    display: flex;
+    gap: 2px;
+    align-items: end;
+    height: 120px;
+    margin-bottom: 0.5rem;
+}
+
+.income-bar,
+.expense-bar {
+    width: 20px;
+    min-height: 2px;
+    border-radius: 2px 2px 0 0;
+    position: relative;
+    font-size: 10px;
+    color: white;
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    padding: 2px;
+    box-sizing: border-box;
+    word-break: break-all;
+    text-align: center;
+}
+
+.income-bar {
+    background: linear-gradient(to top, var(--success-color), #66BB6A);
+}
+
+.expense-bar {
+    background: linear-gradient(to top, var(--danger-color), #EF5350);
+}
+
+.balance-indicator {
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+}
+
+.balance-indicator.positive {
+    color: var(--success-color);
+}
+
+.balance-indicator.negative {
+    color: var(--danger-color);
+}
+
+.transaction-count {
+    font-size: 10px;
+    color: var(--muted-color);
+    text-align: center;
+}
+
+/* 모바일 대응 */
+@media (max-width: 768px) {
+    .monthly-chart-section {
+        margin: 1rem 0;
+        padding: 1rem;
+    }
+    
+    .monthly-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .monthly-header h4 {
+        text-align: center;
+        font-size: var(--font-size-base);
+    }
+    
+    .view-toggle {
+        align-self: center;
+    }
+    
+    .toggle-btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 12px;
+    }
+    
+    /* 표 모바일 스타일 */
+    .monthly-data-table {
+        font-size: 12px;
+    }
+    
+    .monthly-data-table th,
+    .monthly-data-table td {
+        padding: 0.5rem 0.25rem;
+    }
+    
+    .amount {
+        min-width: 60px;
+        padding: 0.25rem;
+        font-size: 11px;
+    }
+    
+    .transaction-count-badge {
+        padding: 0.2rem 0.4rem;
+        font-size: 10px;
+        min-width: 30px;
+    }
+    
+    /* 차트 모바일 스타일 */
+    .chart-bars {
+        gap: 0.25rem;
+        height: 150px;
+    }
+    
+    .month-bar {
+        min-width: 60px;
+    }
+    
+    .bar-container {
+        height: 80px;
+    }
+    
+    .income-bar,
+    .expense-bar {
+        width: 16px;
+        font-size: 8px;
+    }
+    
+    .balance-indicator {
+        font-size: 9px;
+    }
+    
+    .transaction-count {
+        font-size: 8px;
+    }
+}

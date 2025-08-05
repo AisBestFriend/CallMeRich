@@ -6,6 +6,7 @@ class AdvancedBudgetApp {
         this.currentView = 'dashboard';
         this.selectedAccountUserId = 'all'; // 현재 선택된 가계부 사용자 ID ('all'은 전체 보기)
         this.deferredPrompt = null;
+        this.pendingMonthFilter = null; // 월별 필터 정보 저장
         
         // 거래 카테고리 정의
         this.transactionCategories = {
@@ -527,11 +528,16 @@ class AdvancedBudgetApp {
             
             if (!summaryContainer) return;
             
+            // 전체 사용자 합계 데이터 생성
+            const overallSummary = await this.generateOverallSummary();
+            
+            // 개별 사용자 요약 생성
             const userSummaries = await Promise.all(
                 users.map(user => this.generateUserSummary(user))
             );
             
-            summaryContainer.innerHTML = userSummaries.join('');
+            // 전체 요약을 맨 위에, 그 다음 개별 사용자 요약 표시
+            summaryContainer.innerHTML = overallSummary + userSummaries.join('');
             
         } catch (error) {
             console.error('사용자 요약 로드 실패:', error);
@@ -539,6 +545,115 @@ class AdvancedBudgetApp {
             if (summaryContainer) {
                 summaryContainer.innerHTML = '<p class="error-message">데이터를 불러올 수 없습니다.</p>';
             }
+        }
+    }
+
+    // 전체 사용자 합계 요약 생성
+    async generateOverallSummary() {
+        try {
+            // 모든 거래 및 자산 데이터 가져오기 (필터 없이)
+            const allTransactions = await this.dbManager.getTransactions();
+            const allAssets = await this.dbManager.getAssets();
+            
+            // 전체 자산 합계
+            const totalAssets = allAssets.reduce((sum, asset) => sum + asset.currentValue, 0);
+            
+            // 전체 거래 데이터 합계
+            const totalIncome = allTransactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + t.amount, 0);
+                
+            const totalExpense = allTransactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const totalBalance = totalIncome - totalExpense;
+            
+            // 올해 월별 데이터 계산
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const monthlyData = [];
+            
+            for (let month = 1; month <= 12; month++) {
+                const monthStr = `${currentYear}-${String(month).padStart(2, '0')}`;
+                const monthTransactions = allTransactions.filter(t => 
+                    t.date.startsWith(monthStr)
+                );
+                
+                const monthIncome = monthTransactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                    
+                const monthExpense = monthTransactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                
+                monthlyData.push({
+                    month: month,
+                    monthName: `${month}월`,
+                    income: monthIncome,
+                    expense: monthExpense,
+                    balance: monthIncome - monthExpense,
+                    transactionCount: monthTransactions.length
+                });
+            }
+            
+            // 이번 달 거래 데이터  
+            const currentMonth = `${currentYear}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            
+            const thisMonthTransactions = allTransactions.filter(t => 
+                t.date.startsWith(currentMonth)
+            );
+            
+            const monthlyIncome = thisMonthTransactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + t.amount, 0);
+                
+            const monthlyExpense = thisMonthTransactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const monthlyBalance = monthlyIncome - monthlyExpense;
+            
+            // 지난 달과 비교를 위한 데이터
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
+            
+            const lastMonthTransactions = allTransactions.filter(t => 
+                t.date.startsWith(lastMonthStr)
+            );
+            
+            const lastMonthExpense = lastMonthTransactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const expenseChange = lastMonthExpense > 0 ? 
+                ((monthlyExpense - lastMonthExpense) / lastMonthExpense * 100) : 0;
+            
+            return `
+                <div class="user-summary-card overall-summary">
+                    <div class="monthly-chart-section">
+                        <div class="monthly-header">
+                            <h4>📊 전체 데이터 요약</h4>
+                            <div class="view-toggle">
+                                <button class="toggle-btn active" data-view="table" onclick="budgetApp.toggleMonthlyView('overall', 'table')">
+                                    📊 표
+                                </button>
+                                <button class="toggle-btn" data-view="chart" onclick="budgetApp.toggleMonthlyView('overall', 'chart')">
+                                    📈 그래프
+                                </button>
+                            </div>
+                        </div>
+                        <div class="monthly-content" id="monthly-content-overall">
+                            ${this.generateMonthlyTable(monthlyData, {name: '전체'})}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+        } catch (error) {
+            console.error('전체 요약 생성 실패:', error);
+            return '<div class="user-summary-card error"><p>전체 요약 데이터를 불러올 수 없습니다.</p></div>';
         }
     }
 
@@ -553,10 +668,51 @@ class AdvancedBudgetApp {
             const assets = await this.dbManager.getAssets(null, assetFilters);
             const totalAssets = assets.reduce((sum, asset) => sum + asset.currentValue, 0);
             
-            // 이번 달 거래 데이터  
-            const now = new Date();
-            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            // 거래 데이터
             const transactions = await this.dbManager.getTransactions(null, transactionFilters);
+            
+            // 전체 거래 데이터 합계
+            const totalIncome = transactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + t.amount, 0);
+                
+            const totalExpense = transactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const totalBalance = totalIncome - totalExpense;
+            
+            // 올해 월별 데이터 계산
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const monthlyData = [];
+            
+            for (let month = 1; month <= 12; month++) {
+                const monthStr = `${currentYear}-${String(month).padStart(2, '0')}`;
+                const monthTransactions = transactions.filter(t => 
+                    t.date.startsWith(monthStr)
+                );
+                
+                const monthIncome = monthTransactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                    
+                const monthExpense = monthTransactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                
+                monthlyData.push({
+                    month: month,
+                    monthName: `${month}월`,
+                    income: monthIncome,
+                    expense: monthExpense,
+                    balance: monthIncome - monthExpense,
+                    transactionCount: monthTransactions.length
+                });
+            }
+            
+            // 이번 달 거래 데이터  
+            const currentMonth = `${currentYear}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             
             const thisMonthTransactions = transactions.filter(t => 
                 t.date.startsWith(currentMonth)
@@ -619,28 +775,40 @@ class AdvancedBudgetApp {
                         <div class="overview-item transactions">
                             <div class="overview-icon">💸</div>
                             <div class="overview-data">
-                                <h4>이번 달 수지</h4>
+                                <h4>전체 수지</h4>
                                 <div class="transaction-summary">
                                     <div class="income-expense-row">
                                         <span class="income-part">
-                                            📈 ${this.formatCurrency(monthlyIncome, this.currentUser.defaultCurrency)}
-                                            <small class="trend ${incomeChange >= 0 ? 'positive' : 'negative'}">
-                                                ${incomeChange >= 0 ? '↗' : '↘'} ${Math.abs(incomeChange).toFixed(1)}%
-                                            </small>
+                                            📈 ${this.formatCurrency(totalIncome, this.currentUser.defaultCurrency)}
                                         </span>
                                         <span class="divider">-</span>
                                         <span class="expense-part">
-                                            📉 ${this.formatCurrency(monthlyExpense, this.currentUser.defaultCurrency)}
-                                            <small class="trend ${expenseChange <= 0 ? 'positive' : 'negative'}">
-                                                ${expenseChange <= 0 ? '↘' : '↗'} ${Math.abs(expenseChange).toFixed(1)}%
-                                            </small>
+                                            📉 ${this.formatCurrency(totalExpense, this.currentUser.defaultCurrency)}
                                         </span>
                                     </div>
-                                    <div class="balance-result ${monthlyBalance >= 0 ? 'profit' : 'loss'}">
-                                        ${monthlyBalance >= 0 ? '💚' : '❤️'} ${monthlyBalance >= 0 ? '+' : ''}${this.formatCurrency(monthlyBalance, this.currentUser.defaultCurrency)}
-                                        <span class="balance-status">(${monthlyBalance >= 0 ? '흑자' : '적자'})</span>
+                                    <div class="balance-result ${totalBalance >= 0 ? 'profit' : 'loss'}">
+                                        ${totalBalance >= 0 ? '💚' : '❤️'} ${totalBalance >= 0 ? '+' : ''}${this.formatCurrency(totalBalance, this.currentUser.defaultCurrency)}
+                                        <span class="balance-status">(${totalBalance >= 0 ? '흑자' : '적자'})</span>
                                     </div>
+                                    <div class="transactions-count">총 ${transactions.length}건의 거래</div>
                                 </div>
+                            </div>
+                        </div>
+                        
+                        <div class="monthly-chart-section">
+                            <div class="monthly-header">
+                                <h4>📈 ${currentYear}년 월별 수입/지출 현황</h4>
+                                <div class="view-toggle">
+                                    <button class="toggle-btn active" data-view="table" onclick="budgetApp.toggleMonthlyView('${user.id}', 'table')">
+                                        📊 표
+                                    </button>
+                                    <button class="toggle-btn" data-view="chart" onclick="budgetApp.toggleMonthlyView('${user.id}', 'chart')">
+                                        📈 그래프
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="monthly-content" id="monthly-content-${user.id}">
+                                ${this.generateMonthlyTable(monthlyData, user)}
                             </div>
                         </div>
                     </div>
@@ -656,6 +824,318 @@ class AdvancedBudgetApp {
                     </div>
                 </div>
             `;
+        }
+    }
+
+    // 월별 표 생성
+    generateMonthlyTable(monthlyData, user) {
+        if (monthlyData.every(m => m.transactionCount === 0)) {
+            return '<div class="no-data">이번 년도 거래 데이터가 없습니다.</div>';
+        }
+        
+        return `
+            <div class="monthly-table">
+                <table class="monthly-data-table">
+                    <thead>
+                        <tr>
+                            <th>월</th>
+                            <th>수입</th>
+                            <th>지출</th>
+                            <th>순손익</th>
+                            <th>거래건수</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${monthlyData.map(data => `
+                            <tr class="month-row ${data.transactionCount === 0 ? 'empty-month' : ''}" 
+                                ${data.transactionCount > 0 ? `onclick="budgetApp.navigateToMonthTransactions(${data.month}, ${user.id === undefined ? 'null' : `'${user.id}'`})" style="cursor: pointer;"` : ''}>
+                                <td class="month-cell clickable-month">${data.monthName}</td>
+                                <td class="income-cell">
+                                    ${data.income > 0 ? 
+                                        `<span class="amount income">+${this.formatCurrency(data.income, this.currentUser.defaultCurrency)}</span>` : 
+                                        '<span class="amount-zero">-</span>'
+                                    }
+                                </td>
+                                <td class="expense-cell">
+                                    ${data.expense > 0 ? 
+                                        `<span class="amount expense">-${this.formatCurrency(data.expense, this.currentUser.defaultCurrency)}</span>` : 
+                                        '<span class="amount-zero">-</span>'
+                                    }
+                                </td>
+                                <td class="balance-cell">
+                                    ${data.transactionCount > 0 ? 
+                                        `<span class="amount balance ${data.balance >= 0 ? 'positive' : 'negative'}">
+                                            ${data.balance >= 0 ? '+' : ''}${this.formatCurrency(data.balance, this.currentUser.defaultCurrency)}
+                                        </span>` : 
+                                        '<span class="amount-zero">-</span>'
+                                    }
+                                </td>
+                                <td class="count-cell">
+                                    <span class="transaction-count-badge">${data.transactionCount}건</span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td><strong>합계</strong></td>
+                            <td class="income-cell">
+                                <span class="amount income total">
+                                    +${this.formatCurrency(monthlyData.reduce((sum, m) => sum + m.income, 0), this.currentUser.defaultCurrency)}
+                                </span>
+                            </td>
+                            <td class="expense-cell">
+                                <span class="amount expense total">
+                                    -${this.formatCurrency(monthlyData.reduce((sum, m) => sum + m.expense, 0), this.currentUser.defaultCurrency)}
+                                </span>
+                            </td>
+                            <td class="balance-cell">
+                                <span class="amount balance total ${monthlyData.reduce((sum, m) => sum + m.balance, 0) >= 0 ? 'positive' : 'negative'}">
+                                    ${monthlyData.reduce((sum, m) => sum + m.balance, 0) >= 0 ? '+' : ''}${this.formatCurrency(monthlyData.reduce((sum, m) => sum + m.balance, 0), this.currentUser.defaultCurrency)}
+                                </span>
+                            </td>
+                            <td class="count-cell">
+                                <span class="transaction-count-badge total">
+                                    ${monthlyData.reduce((sum, m) => sum + m.transactionCount, 0)}건
+                                </span>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+    }
+
+    // 월별 차트 생성
+    generateMonthlyChart(monthlyData, user) {
+        // 최대값 계산 (차트 스케일링용)
+        const maxAmount = Math.max(
+            ...monthlyData.map(m => Math.max(m.income, m.expense))
+        );
+        
+        if (maxAmount === 0) {
+            return '<div class="no-data">이번 년도 거래 데이터가 없습니다.</div>';
+        }
+        
+        return `
+            <div class="monthly-chart horizontal">
+                <div class="chart-legend">
+                    <span class="legend-item income">📈 수입</span>
+                    <span class="legend-item expense">📉 지출</span>
+                    <span class="legend-item balance">💰 순손익</span>
+                </div>
+                <div class="chart-rows">
+                    ${monthlyData.map(data => `
+                        <div class="month-row ${data.transactionCount > 0 ? 'clickable-month-row' : ''}" 
+                             ${data.transactionCount > 0 ? `onclick="budgetApp.navigateToMonthTransactions(${data.month}, ${user.id === undefined ? 'null' : `'${user.id}'`})" style="cursor: pointer;"` : ''}>
+                            <div class="month-label">${data.monthName}</div>
+                            <div class="bars-container">
+                                <div class="income-bar" style="width: ${data.income > 0 ? (data.income / maxAmount * 100) : 0}%" 
+                                     title="수입: ${this.formatCurrency(data.income, this.currentUser.defaultCurrency)}">
+                                    <span class="bar-text">${data.income > 0 ? this.formatCurrency(data.income, this.currentUser.defaultCurrency, true) : ''}</span>
+                                </div>
+                                <div class="expense-bar" style="width: ${data.expense > 0 ? (data.expense / maxAmount * 100) : 0}%" 
+                                     title="지출: ${this.formatCurrency(data.expense, this.currentUser.defaultCurrency)}">
+                                    <span class="bar-text">${data.expense > 0 ? this.formatCurrency(data.expense, this.currentUser.defaultCurrency, true) : ''}</span>
+                                </div>
+                            </div>
+                            <div class="month-summary">
+                                <div class="balance-indicator ${data.balance >= 0 ? 'positive' : 'negative'}">
+                                    ${data.balance >= 0 ? '+' : ''}${this.formatCurrency(data.balance, this.currentUser.defaultCurrency, true)}
+                                </div>
+                                <div class="transaction-count">${data.transactionCount}건</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // 월별 뷰 토글 (표/그래프)
+    async toggleMonthlyView(userId, viewType) {
+        try {
+            let transactions, user, contentContainer;
+            
+            if (userId === 'overall') {
+                // 전체 데이터의 경우
+                transactions = await this.dbManager.getTransactions();
+                user = {name: '전체'};
+                contentContainer = document.getElementById('monthly-content-overall');
+            } else {
+                // 개별 사용자의 경우
+                const transactionFilters = { accountUserId: userId };
+                transactions = await this.dbManager.getTransactions(null, transactionFilters);
+                const users = await this.dbManager.getAllAccountUsers();
+                user = users.find(u => u.id === userId);
+                contentContainer = document.getElementById(`monthly-content-${userId}`);
+            }
+            
+            // 올해 월별 데이터 계산
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const monthlyData = [];
+            
+            for (let month = 1; month <= 12; month++) {
+                const monthStr = `${currentYear}-${String(month).padStart(2, '0')}`;
+                const monthTransactions = transactions.filter(t => 
+                    t.date.startsWith(monthStr)
+                );
+                
+                const monthIncome = monthTransactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                    
+                const monthExpense = monthTransactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                
+                monthlyData.push({
+                    month: month,
+                    monthName: `${month}월`,
+                    income: monthIncome,
+                    expense: monthExpense,
+                    balance: monthIncome - monthExpense,
+                    transactionCount: monthTransactions.length
+                });
+            }
+            
+            // 컨텐츠 업데이트
+            if (contentContainer && user) {
+                if (viewType === 'table') {
+                    contentContainer.innerHTML = this.generateMonthlyTable(monthlyData, user);
+                } else {
+                    contentContainer.innerHTML = this.generateMonthlyChart(monthlyData, user);
+                }
+            }
+            
+            // 토글 버튼 상태 업데이트
+            const toggleContainer = userId === 'overall' ? 
+                document.querySelector('.overall-summary .view-toggle') :
+                document.querySelector(`#monthly-content-${userId}`).closest('.monthly-chart-section').querySelector('.view-toggle');
+                
+            if (toggleContainer) {
+                const toggleButtons = toggleContainer.querySelectorAll('.toggle-btn');
+                toggleButtons.forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.view === viewType) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+            
+        } catch (error) {
+            console.error('월별 뷰 전환 실패:', error);
+            this.showError('뷰 전환 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 월별 거래내역으로 이동
+    navigateToMonthTransactions(month, userId = null) {
+        // 현재 연도와 선택된 월로 날짜 범위 설정
+        const currentYear = new Date().getFullYear();
+        const startDate = `${currentYear}-${String(month).padStart(2, '0')}-01`;
+        
+        // 해당 월의 마지막 날 계산
+        const lastDay = new Date(currentYear, month, 0).getDate();
+        const endDate = `${currentYear}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        
+        // 사용자 ID 처리 - 전체 요약에서는 전체 데이터 조회
+        let filterUserId = null;
+        if (userId && userId !== 'overall') {
+            filterUserId = userId;
+        } else if (!userId) {
+            filterUserId = this.selectedAccountUserId === 'all' ? null : this.selectedAccountUserId;
+        }
+        
+        // 월별 필터 정보 저장
+        this.pendingMonthFilter = {
+            startDate: startDate,
+            endDate: endDate,
+            month: month,
+            userId: filterUserId
+        };
+        
+        // 거래내역 페이지로 이동
+        this.navigateTo('transactions');
+    }
+
+    // 월별 필터 설정
+    setMonthFilter(startDate, endDate, month) {
+        try {
+            // 날짜 필터 설정
+            const dateFromElement = document.getElementById('filter-date-from');
+            const dateToElement = document.getElementById('filter-date-to');
+            
+            if (dateFromElement && dateToElement) {
+                dateFromElement.value = startDate;
+                dateToElement.value = endDate;
+                
+                // 필터 적용
+                this.applyFilters();
+                
+                // 사용자에게 알림
+                this.showToast(`${month}월 거래내역을 조회합니다.`, 'info');
+            }
+        } catch (error) {
+            console.error('월별 필터 설정 실패:', error);
+            this.showError('필터 설정 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 대기 중인 월별 필터 적용
+    applyPendingMonthFilter() {
+        try {
+            if (!this.pendingMonthFilter) return;
+            
+            const { startDate, endDate, month, userId } = this.pendingMonthFilter;
+            
+            // 사용자 필터 설정
+            if (userId) {
+                this.selectedAccountUserId = userId;
+            } else {
+                // 전체 데이터 조회 시 'all' 설정
+                this.selectedAccountUserId = 'all';
+            }
+            
+            // 사용자 선택 드롭다운 업데이트
+            const userSelectElement = document.getElementById('account-user-select');
+            if (userSelectElement) {
+                userSelectElement.value = this.selectedAccountUserId;
+            }
+            
+            // 날짜 필터 설정
+            const dateFromElement = document.getElementById('filter-date-from');
+            const dateToElement = document.getElementById('filter-date-to');
+            
+            if (dateFromElement && dateToElement) {
+                dateFromElement.value = startDate;
+                dateToElement.value = endDate;
+                
+                // 필터 적용하여 거래내역 로드
+                this.applyFilters();
+                
+                // 사용자 이름 가져오기 및 알림 표시
+                if (userId && userId !== 'all') {
+                    // 사용자 정보 찾기
+                    this.dbManager.getAllAccountUsers().then(users => {
+                        const user = users.find(u => u.id === userId);
+                        const userDisplayName = user ? user.name : '선택된 사용자';
+                        this.showToast(`${userDisplayName}의 ${month}월 거래내역을 조회합니다.`, 'info');
+                    });
+                } else {
+                    this.showToast(`${month}월 전체 거래내역을 조회합니다.`, 'info');
+                }
+                
+                // 필터 정보 초기화
+                this.pendingMonthFilter = null;
+            }
+        } catch (error) {
+            console.error('월별 필터 적용 실패:', error);
+            this.showError('필터 적용 중 오류가 발생했습니다.');
+            // 오류 시 기본 로드 수행
+            this.setDefaultDateFilters();
+            this.loadTransactions();
         }
     }
 
@@ -728,6 +1208,13 @@ class AdvancedBudgetApp {
                         
                         <button class="btn-primary" onclick="budgetApp.applyFilters()">필터 적용</button>
                         <button class="btn-secondary" onclick="budgetApp.clearFilters()">초기화</button>
+                        
+                        <select id="sort-option" onchange="budgetApp.applySorting()">
+                            <option value="date-desc">거래일자 ↓ (최신순)</option>
+                            <option value="date-asc">거래일자 ↑ (과거순)</option>
+                            <option value="amount-desc">금액 ↓ (높은순)</option>
+                            <option value="amount-asc">금액 ↑ (낮은순)</option>
+                        </select>
                     </div>
                 </div>
                 
@@ -737,18 +1224,23 @@ class AdvancedBudgetApp {
             </div>
         `;
         
-        // 렌더링 후 데이터 로드 및 날짜 필터 초기화
+        // 렌더링 후 데이터 로드 및 필터 설정
         setTimeout(() => {
-            this.setDefaultDateFilters();
-            this.loadTransactions();
+            // 월별 필터가 있으면 적용, 없으면 기본 필터 설정
+            if (this.pendingMonthFilter) {
+                this.applyPendingMonthFilter();
+            } else {
+                this.setDefaultDateFilters();
+                this.loadTransactions();
+            }
         }, 100);
         
         return html;
     }
 
-    // 날짜 필터 기본값 설정 (빈 값으로 전체 조회)
+    // 날짜 필터 기본값 설정 (전체 조회를 위해 빈 값으로 설정)
     setDefaultDateFilters() {
-        // 날짜 필터를 빈 값으로 설정하여 전체 거래 내역 조회
+        // 날짜 필터를 빈 값으로 설정하여 전체 조회
         const dateFromElement = document.getElementById('filter-date-from');
         const dateToElement = document.getElementById('filter-date-to');
         
@@ -795,9 +1287,14 @@ class AdvancedBudgetApp {
             }
             
             const transactions = await this.dbManager.getTransactions(null, filters);
+            
+            // 현재 정렬 옵션 적용
+            const sortOption = document.getElementById('sort-option')?.value || 'date-desc';
+            const sortedTransactions = this.sortTransactions(transactions, sortOption);
+            
             const transactionsList = document.querySelector('.transactions-list');
             if (transactionsList) {
-                transactionsList.innerHTML = await this.renderTransactionsList(transactions);
+                transactionsList.innerHTML = await this.renderTransactionsList(sortedTransactions);
             }
         } catch (error) {
             console.error('거래 내역 로드 실패:', error);
@@ -814,17 +1311,12 @@ class AdvancedBudgetApp {
             return '<div class="no-data">거래 내역이 없습니다.</div>';
         }
 
-        // 사용자 정보를 간단하게 매핑 (모든 가능한 ID 포함)
-        const userMap = {
-            "윤찬영": { displayName: "윤찬영" },
-            "제연주": { displayName: "제연주" },
-            "chanyoung_user": { displayName: "윤찬영" },
-            "yeonju_user": { displayName: "제연주" },
-            "chanyoung_account": { displayName: "윤찬영" },
-            "yeonju_account": { displayName: "제연주" },
-            "chanyoung": { displayName: "윤찬영" },
-            "yeonju": { displayName: "제연주" }
-        };
+        // account_users 테이블에서 실제 사용자 정보 가져오기
+        const accountUsers = await this.dbManager.getAllAccountUsers();
+        const userMap = {};
+        accountUsers.forEach(user => {
+            userMap[user.id] = user;
+        });
 
         return transactions.map(transaction => {
             const category = this.transactionCategories[transaction.type]?.[transaction.category];
@@ -838,8 +1330,8 @@ class AdvancedBudgetApp {
             const createdDate = new Date(transaction.createdAt || transaction.date).toLocaleDateString('ko-KR');
             const createdTime = new Date(transaction.createdAt || transaction.date).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'});
             
-            // 사용자 정보 - userId에서 직접 매핑
-            const user = userMap[transaction.userId] || { displayName: transaction.userId || "미지정" };
+            // accountUserId를 사용하여 실제 사용자 정보 매핑
+            const user = userMap[transaction.accountUserId];
             const userInfo = user ? `${user.name}${user.relationship ? ` (${user.relationship})` : ''}` : '미지정';
             
             return `
@@ -1747,6 +2239,7 @@ class AdvancedBudgetApp {
             }
         });
         
+        
         // 폼 제출 이벤트
         document.addEventListener('submit', async (e) => {
             if (e.target.matches('#login-form')) {
@@ -2548,11 +3041,16 @@ class AdvancedBudgetApp {
         try {
             this.showToast('필터를 적용하는 중...', 'info');
             const transactions = await this.dbManager.getTransactions(null, filters);
+            
+            // 현재 정렬 옵션 적용
+            const sortOption = document.getElementById('sort-option')?.value || 'date-desc';
+            const sortedTransactions = this.sortTransactions(transactions, sortOption);
+            
             const transactionsList = document.querySelector('.transactions-list');
             if (transactionsList) {
-                transactionsList.innerHTML = await this.renderTransactionsList(transactions);
+                transactionsList.innerHTML = await this.renderTransactionsList(sortedTransactions);
             }
-            this.showToast(`${transactions.length}개의 거래내역을 찾았습니다.`);
+            this.showToast(`${sortedTransactions.length}개의 거래내역을 찾았습니다.`);
         } catch (error) {
             console.error('필터 적용 에러:', error);
             this.showError('필터 적용 중 오류가 발생했습니다.');
@@ -2571,8 +3069,13 @@ class AdvancedBudgetApp {
             if (filterType) filterType.value = '';
             if (filterCategory) filterCategory.value = '';
             
-            // 날짜 필터를 빈 값으로 재설정 (전체 조회)
-            this.setDefaultDateFilters();
+            // 날짜 필터도 빈 값으로 초기화
+            if (filterDateFrom) filterDateFrom.value = '';
+            if (filterDateTo) filterDateTo.value = '';
+            
+            // 정렬 옵션도 초기화
+            const sortOption = document.getElementById('sort-option');
+            if (sortOption) sortOption.value = 'date-desc';
             
             this.showToast('필터를 초기화했습니다.');
             await this.applyFilters();
@@ -2582,6 +3085,63 @@ class AdvancedBudgetApp {
         }
     }
 
+    // 정렬 적용
+    async applySorting() {
+        try {
+            const sortOption = document.getElementById('sort-option')?.value || 'date-desc';
+            const filters = {
+                type: document.getElementById('filter-type')?.value || '',
+                category: document.getElementById('filter-category')?.value || '',
+                dateFrom: document.getElementById('filter-date-from')?.value || '',
+                dateTo: document.getElementById('filter-date-to')?.value || ''
+            };
+
+            // 사용자 필터 추가
+            if (this.selectedAccountUserId && this.selectedAccountUserId !== 'all') {
+                filters.accountUserId = this.selectedAccountUserId;
+            }
+
+            const transactions = await this.dbManager.getTransactions(null, filters);
+            
+            // 정렬 적용
+            const sortedTransactions = this.sortTransactions(transactions, sortOption);
+            
+            const transactionsList = document.querySelector('.transactions-list');
+            if (transactionsList) {
+                transactionsList.innerHTML = await this.renderTransactionsList(sortedTransactions);
+            }
+            
+            const sortLabels = {
+                'date-desc': '최신순',
+                'date-asc': '과거순', 
+                'amount-desc': '금액 높은순',
+                'amount-asc': '금액 낮은순'
+            };
+            
+            this.showToast(`${sortLabels[sortOption]}로 ${sortedTransactions.length}개 거래내역을 정렬했습니다.`);
+        } catch (error) {
+            console.error('정렬 적용 에러:', error);
+            this.showError('정렬 적용 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 거래내역 정렬
+    sortTransactions(transactions, sortOption) {
+        return transactions.sort((a, b) => {
+            switch (sortOption) {
+                case 'date-desc':
+                    return new Date(b.date) - new Date(a.date);
+                case 'date-asc':
+                    return new Date(a.date) - new Date(b.date);
+                case 'amount-desc':
+                    return b.amount - a.amount;
+                case 'amount-asc':
+                    return a.amount - b.amount;
+                default:
+                    return new Date(b.date) - new Date(a.date); // 기본값: 최신순
+            }
+        });
+    }
 
     // 거래 아이콘 가져오기
     getTransactionIcon(type, category) {
@@ -2590,8 +3150,28 @@ class AdvancedBudgetApp {
     }
 
     // 통화 포맷팅
-    formatCurrency(amount, currency = 'KRW') {
+    formatCurrency(amount, currency = 'KRW', abbreviated = false) {
         const currencyInfo = this.currencies[currency];
+        
+        if (abbreviated && Math.abs(amount) >= 1000) {
+            // 축약 형식
+            let value = amount;
+            let suffix = '';
+            
+            if (Math.abs(value) >= 1000000000) {
+                value = value / 1000000000;
+                suffix = 'B';
+            } else if (Math.abs(value) >= 1000000) {
+                value = value / 1000000;
+                suffix = 'M';
+            } else if (Math.abs(value) >= 1000) {
+                value = value / 1000;
+                suffix = 'K';
+            }
+            
+            return `${currencyInfo.symbol}${value.toFixed(value % 1 === 0 ? 0 : 1)}${suffix}`;
+        }
+        
         return `${currencyInfo.symbol}${amount.toLocaleString()}`;
     }
 
